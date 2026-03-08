@@ -1,0 +1,16 @@
+.next
+node_modules
+.env
+.DS_Store
+*.log
+
+# Local Netlify folder
+.netlify
+# Local Vercel folder
+.vercel
+# Local AWS Amplify folder
+.amplify
+# Local Firebase folder
+.firebase
+# Local Heroku folder
+.heroku

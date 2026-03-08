@@ -1,0 +1,267 @@
+// This is your Prisma schema file for Task Manager with RBAC
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+// ============================================
+// RBAC MODELS
+// ============================================
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  users       User[]
+  permissions RolePermission[]
+
+  @@index([name])
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  resource    String   // e.g., "project", "task", "user"
+  action      String   // e.g., "create", "read", "update", "delete"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  roles RolePermission[]
+
+  @@unique([resource, action])
+  @@index([resource])
+  @@index([action])
+}
+
+// Many-to-Many: Role <-> Permission
+model RolePermission {
+  roleId       String
+  permissionId String
+  assignedAt   DateTime @default(now())
+
+  // Relations
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+}
+
+// ============================================
+// USER MODEL
+// ============================================
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  roleId    String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  role              Role                @relation(fields: [roleId], references: [id])
+  projectAssignments ProjectAssignment[]
+  sectionAssignments SectionAssignment[]
+  taskAssignments    TaskAssignment[]
+  comments          Comment[]
+  weeklyReports     WeeklyReport[]
+
+  @@index([email])
+  @@index([roleId])
+  @@index([isActive])
+}
+
+// ============================================
+// PROJECT MODELS
+// ============================================
+
+model Project {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  deadline    DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  sections    Section[]
+  assignments ProjectAssignment[]
+
+  @@index([name])
+  @@index([deadline])
+}
+
+// Many-to-Many: User <-> Project
+model ProjectAssignment {
+  userId     String
+  projectId  String
+  assignedAt DateTime @default(now())
+
+  // Relations
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([userId, projectId])
+  @@index([userId])
+  @@index([projectId])
+}
+
+// ============================================
+// SECTION MODELS
+// ============================================
+
+model Section {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  deadline    DateTime?
+  projectId   String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  project     Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks       Task[]
+  assignments SectionAssignment[]
+
+  @@index([projectId])
+  @@index([name])
+  @@index([deadline])
+}
+
+// Many-to-Many: User <-> Section
+model SectionAssignment {
+  userId     String
+  sectionId  String
+  assignedAt DateTime @default(now())
+
+  // Relations
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  section Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@id([userId, sectionId])
+  @@index([userId])
+  @@index([sectionId])
+}
+
+// ============================================
+// TASK MODELS
+// ============================================
+
+model Task {
+  id          String       @id @default(cuid())
+  title       String
+  description String?
+  status      TaskStatus   @default(TODO)
+  priority    TaskPriority @default(MEDIUM)
+  deadline    DateTime?
+  sectionId   String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  // Relations
+  section     Section          @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  assignments TaskAssignment[]
+  comments    Comment[]
+
+  @@index([sectionId])
+  @@index([status])
+  @@index([priority])
+  @@index([deadline])
+  @@index([createdAt])
+}
+
+// Many-to-Many: User <-> Task
+model TaskAssignment {
+  userId     String
+  taskId     String
+  assignedAt DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@id([userId, taskId])
+  @@index([userId])
+  @@index([taskId])
+}
+
+// ============================================
+// COMMENT MODEL
+// ============================================
+
+model Comment {
+  id        String   @id @default(cuid())
+  message   String
+  isFixed   Boolean  @default(false)
+  taskId    String
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([userId])
+  @@index([isFixed])
+  @@index([createdAt])
+}
+
+// ============================================
+// WEEKLY REPORT MODEL
+// ============================================
+
+model WeeklyReport {
+  id                 String   @id @default(cuid())
+  userId             String
+  weekStart          DateTime
+  weekEnd            DateTime
+  totalTasks         Int      @default(0)
+  completedTasks     Int      @default(0)
+  pendingTasks       Int      @default(0)
+  overdueTasks       Int      @default(0)
+  progressPercentage Float    @default(0)
+  createdAt          DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, weekStart])
+  @@index([userId])
+  @@index([weekStart])
+  @@index([weekEnd])
+}
