@@ -34,6 +34,7 @@ export default function TasksPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true); // ADD THIS
 
   const [formData, setFormData] = useState({
     title: "",
@@ -43,11 +44,19 @@ export default function TasksPage() {
     sectionId: "",
   });
 
-  // Fetch tasks and sections
   useEffect(() => {
-    fetchTasks();
-    fetchSections();
+    fetchData();
   }, []);
+
+  // COMBINED FETCH WITH LOADING STATE
+  const fetchData = async () => {
+    setFetching(true);
+    try {
+      await Promise.all([fetchTasks(), fetchSections()]);
+    } finally {
+      setFetching(false);
+    }
+  };
 
   const fetchTasks = async () => {
     try {
@@ -198,16 +207,22 @@ export default function TasksPage() {
     { id: "IN_PROGRESS", title: "In Progress", status: "IN_PROGRESS" as const },
     { id: "DONE", title: "Done", status: "DONE" as const },
   ];
-  if (loading && tasks.length === 0) {
+
+  // SHOW LOADING STATE
+  if (fetching) {
     return (
       <div>
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Tasks</h1>
+          <button className="flex items-center gap-2 bg-primary-500 text-white px-4 py-2 rounded-lg">
+            <PlusIcon className="w-5 h-5" />
+            Create Task
+          </button>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {["TODO", "IN_PROGRESS", "DONE"].map((status) => (
-            <div key={status} className="bg-gray-50 rounded-lg p-4">
-              <h3 className="font-semibold text-gray-900 mb-4">{status}</h3>
+          {["To Do", "In Progress", "Done"].map((title) => (
+            <div key={title} className="bg-gray-50 rounded-lg p-4">
+              <h3 className="font-semibold text-gray-900 mb-4">{title}</h3>
               <div className="space-y-3">
                 <LoadingCard />
                 <LoadingCard />
@@ -218,6 +233,7 @@ export default function TasksPage() {
       </div>
     );
   }
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -257,12 +273,14 @@ export default function TasksPage() {
                         <button
                           onClick={() => openEditModal(task)}
                           className="text-blue-600 hover:text-blue-800"
+                          title="Edit"
                         >
                           <PencilIcon className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => handleDelete(task.id)}
                           className="text-red-600 hover:text-red-800"
+                          title="Delete"
                         >
                           <TrashIcon className="w-4 h-4" />
                         </button>
@@ -315,6 +333,14 @@ export default function TasksPage() {
                     </div>
                   </div>
                 ))}
+
+              {/* Empty state for column */}
+              {tasks.filter((task) => task.status === column.status).length ===
+                0 && (
+                <div className="text-center py-8 text-gray-400">
+                  <p className="text-sm">No tasks</p>
+                </div>
+              )}
             </div>
           </div>
         ))}
