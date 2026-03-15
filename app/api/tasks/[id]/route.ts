@@ -1,13 +1,23 @@
-// app/api/tasks/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import {
-  requireAuth,
-  hasPermission,
-  isAssignedToTask,
-} from "@/lib/permissions";
-import { updateTaskSchema } from "@/lib/validations/schemas";
+import { checkPermission } from "@/lib/permissions";
 import { TaskStatus, TaskPriority } from "@prisma/client";
+
+// Helper function to check if user is assigned to a task
+async function isUserAssignedToTask(
+  userId: string,
+  taskId: string,
+): Promise<boolean> {
+  const assignment = await prisma.taskAssignment.findFirst({
+    where: {
+      taskId,
+      userId,
+    },
+  });
+  return !!assignment;
+}
 
 /**
  * GET /api/tasks/[id]
@@ -16,13 +26,18 @@ import { TaskStatus, TaskPriority } from "@prisma/client";
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } },
 ) {
   try {
-    const session = await requireAuth();
+    const session = await getServerSession(authOptions);
+
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const taskId = params.id;
 
-    // Check if task exists first
+    // Fetch task with all related data
     const task = await prisma.task.findUnique({
       where: { id: taskId },
       include: {
@@ -74,30 +89,22 @@ export async function GET(
     }
 
     // Check permissions: user must have task:read OR be assigned to task
-    const canReadAll = hasPermission("task", "read", session.user.permissions);
-    const isAssigned = await isAssignedToTask(session.user.id, taskId);
+    const hasReadPermission = checkPermission(session, "task", "read");
+    const isAssigned = await isUserAssignedToTask(session.user.id, taskId);
 
-    if (!canReadAll && !isAssigned) {
+    if (!hasReadPermission && !isAssigned) {
       return NextResponse.json(
-        {
-          error:
-            "Forbidden: You don't have permission to view this task or you're not assigned to it",
-        },
-        { status: 403 }
+        { error: "Forbidden: You don't have permission to view this task" },
+        { status: 403 },
       );
     }
 
     return NextResponse.json({ task });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Get task error:", error);
-
-    if (error.message === "Unauthorized") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -111,10 +118,15 @@ export async function GET(
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } },
 ) {
   try {
-    const session = await requireAuth();
+    const session = await getServerSession(authOptions);
+
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const taskId = params.id;
 
     // Check if task exists
@@ -135,67 +147,77 @@ export async function PATCH(
     }
 
     // Check permissions
-    const canUpdateAll = hasPermission(
-      "task",
-      "update",
-      session.user.permissions
-    );
-    const isAssigned = await isAssignedToTask(session.user.id, taskId);
+    const hasUpdatePermission = checkPermission(session, "task", "update");
+    const isAssigned = await isUserAssignedToTask(session.user.id, taskId);
 
-    if (!canUpdateAll && !isAssigned) {
+    if (!hasUpdatePermission && !isAssigned) {
       return NextResponse.json(
-        {
-          error:
-            "Forbidden: You don't have permission to update this task or you're not assigned to it",
-        },
-        { status: 403 }
+        { error: "Forbidden: You don't have permission to update this task" },
+        { status: 403 },
       );
     }
 
-    // Parse and validate request body
+    // Parse request body
     const body = await request.json();
-    const validation = updateTaskSchema.safeParse(body);
-
-    if (!validation.success) {
-      return NextResponse.json(
-        {
-          error: "Validation failed",
-          details: validation.error.errors,
-        },
-        { status: 400 }
-      );
-    }
-
     const { title, description, status, priority, deadline, assignedUserIds } =
-      validation.data;
+      body;
 
     // If user is only assigned (not admin), restrict what they can update
-    if (!canUpdateAll && isAssigned) {
+    if (!hasUpdatePermission && isAssigned) {
       // Assigned users can only update status and description
-      if (title || priority || deadline || assignedUserIds) {
+      if (
+        title !== undefined ||
+        priority !== undefined ||
+        deadline !== undefined ||
+        assignedUserIds !== undefined
+      ) {
         return NextResponse.json(
           {
             error:
-              "Forbidden: Assigned users can only update status and description. Contact an admin to modify other fields.",
+              "Forbidden: You can only update status and description. Contact an admin to modify other fields.",
           },
-          { status: 403 }
+          { status: 403 },
         );
       }
     }
 
+    // Validate status if provided
+    if (
+      status !== undefined &&
+      !["TODO", "IN_PROGRESS", "DONE"].includes(status)
+    ) {
+      return NextResponse.json(
+        { error: "Invalid status. Must be TODO, IN_PROGRESS, or DONE" },
+        { status: 400 },
+      );
+    }
+
+    // Validate priority if provided
+    if (
+      priority !== undefined &&
+      !["LOW", "MEDIUM", "HIGH"].includes(priority)
+    ) {
+      return NextResponse.json(
+        { error: "Invalid priority. Must be LOW, MEDIUM, or HIGH" },
+        { status: 400 },
+      );
+    }
+
     // Verify all assigned users exist if provided (only admins can reassign)
     if (assignedUserIds && assignedUserIds.length > 0) {
-      const users = await prisma.user.findMany({
+      const allUsers = await prisma.user.findMany({
         where: {
           id: { in: assignedUserIds },
-          isActive: true,
         },
       });
 
-      if (users.length !== assignedUserIds.length) {
+      // Filter out suspended users
+      const activeUsers = allUsers.filter((user) => !user.suspended);
+
+      if (activeUsers.length !== assignedUserIds.length) {
         return NextResponse.json(
-          { error: "One or more assigned users not found or inactive" },
-          { status: 400 }
+          { error: "One or more assigned users not found or are suspended" },
+          { status: 400 },
         );
       }
     }
@@ -204,19 +226,21 @@ export async function PATCH(
     const updatedTask = await prisma.task.update({
       where: { id: taskId },
       data: {
-        ...(title !== undefined && { title }),
-        ...(description !== undefined && { description }),
+        ...(title !== undefined && { title: title.trim() }),
+        ...(description !== undefined && {
+          description: description?.trim() || null,
+        }),
         ...(status !== undefined && { status: status as TaskStatus }),
         ...(priority !== undefined && { priority: priority as TaskPriority }),
         ...(deadline !== undefined && {
           deadline: deadline ? new Date(deadline) : null,
         }),
         // Only update assignments if user has full permissions
-        ...(canUpdateAll &&
+        ...(hasUpdatePermission &&
           assignedUserIds && {
             assignments: {
               deleteMany: {},
-              create: assignedUserIds.map((userId) => ({
+              create: assignedUserIds.map((userId: string) => ({
                 userId,
               })),
             },
@@ -256,16 +280,11 @@ export async function PATCH(
       message: "Task updated successfully",
       task: updatedTask,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Update task error:", error);
-
-    if (error.message === "Unauthorized") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -277,19 +296,22 @@ export async function PATCH(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } },
 ) {
   try {
-    const session = await requireAuth();
+    const session = await getServerSession(authOptions);
+
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const taskId = params.id;
 
     // Only users with explicit delete permission can delete tasks
-    const canDelete = hasPermission("task", "delete", session.user.permissions);
-
-    if (!canDelete) {
+    if (!checkPermission(session, "task", "delete")) {
       return NextResponse.json(
-        { error: "Forbidden: Missing task:delete permission" },
-        { status: 403 }
+        { error: "Forbidden: You don't have permission to delete tasks" },
+        { status: 403 },
       );
     }
 
@@ -318,16 +340,11 @@ export async function DELETE(
       message: "Task deleted successfully",
       deletedComments: task._count.comments,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Delete task error:", error);
-
-    if (error.message === "Unauthorized") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

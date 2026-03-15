@@ -27,3 +27,17 @@ export async function getUserPermissions() {
   const session = await getServerSession(authOptions);
   return session?.user?.permissions || [];
 }
+
+// NEW: Check if user has permission from session object
+export function checkPermission(
+  session: any,
+  resource: string,
+  action: string,
+): boolean {
+  if (!session?.user?.permissions) {
+    return false;
+  }
+  return session.user.permissions.some(
+    (p: any) => p.resource === resource && p.action === action,
+  );
+}

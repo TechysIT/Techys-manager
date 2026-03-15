@@ -1,8 +1,8 @@
-// app/api/comments/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { requireAuth, hasPermission } from "@/lib/permissions";
-import { createCommentSchema } from "@/lib/validations/schemas";
+import { checkPermission } from "@/lib/permissions";
 
 /**
  * GET /api/comments?taskId=xxx
@@ -11,24 +11,51 @@ import { createCommentSchema } from "@/lib/validations/schemas";
  */
 export async function GET(request: NextRequest) {
   try {
-    const session = await requireAuth();
+    const session = await getServerSession(authOptions);
+
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const taskId = searchParams.get("taskId");
 
     if (!taskId) {
       return NextResponse.json(
         { error: "taskId query parameter is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     // Check if task exists
     const task = await prisma.task.findUnique({
       where: { id: taskId },
+      include: {
+        assignments: {
+          select: {
+            userId: true,
+          },
+        },
+      },
     });
 
     if (!task) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    }
+
+    // Check permission: either has comment:read OR is assigned to the task
+    const hasReadPermission = checkPermission(session, "comment", "read");
+    const isAssignedToTask = task.assignments.some(
+      (assignment) => assignment.userId === session.user.id,
+    );
+
+    if (!hasReadPermission && !isAssignedToTask) {
+      return NextResponse.json(
+        {
+          error: "Forbidden: You don't have permission to view these comments",
+        },
+        { status: 403 },
+      );
     }
 
     // Fetch comments for the task
@@ -49,16 +76,11 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json({ comments });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Get comments error:", error);
-
-    if (error.message === "Unauthorized") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -70,37 +92,66 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const session = await requireAuth();
+    const session = await getServerSession(authOptions);
 
-    // Parse and validate request body
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Parse request body
     const body = await request.json();
-    const validation = createCommentSchema.safeParse(body);
+    const { content, taskId } = body;
 
-    if (!validation.success) {
+    // Validate required fields
+    if (!content || content.trim() === "") {
       return NextResponse.json(
-        {
-          error: "Validation failed",
-          details: validation.error.errors,
-        },
-        { status: 400 }
+        { error: "Comment content is required" },
+        { status: 400 },
       );
     }
 
-    const { message, taskId } = validation.data;
+    if (!taskId) {
+      return NextResponse.json(
+        { error: "taskId is required" },
+        { status: 400 },
+      );
+    }
 
-    // Verify task exists
+    // Verify task exists and get assignments
     const task = await prisma.task.findUnique({
       where: { id: taskId },
+      include: {
+        assignments: {
+          select: {
+            userId: true,
+          },
+        },
+      },
     });
 
     if (!task) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
 
+    // Check permission: either has comment:create OR is assigned to the task
+    const hasCreatePermission = checkPermission(session, "comment", "create");
+    const isAssignedToTask = task.assignments.some(
+      (assignment) => assignment.userId === session.user.id,
+    );
+
+    if (!hasCreatePermission && !isAssignedToTask) {
+      return NextResponse.json(
+        {
+          error: "Forbidden: You don't have permission to comment on this task",
+        },
+        { status: 403 },
+      );
+    }
+
     // Create comment
     const comment = await prisma.comment.create({
       data: {
-        message,
+        content: content.trim(),
         taskId,
         userId: session.user.id,
       },
@@ -126,18 +177,13 @@ export async function POST(request: NextRequest) {
         message: "Comment created successfully",
         comment,
       },
-      { status: 201 }
+      { status: 201 },
     );
-  } catch (error: any) {
+  } catch (error) {
     console.error("Create comment error:", error);
-
-    if (error.message === "Unauthorized") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

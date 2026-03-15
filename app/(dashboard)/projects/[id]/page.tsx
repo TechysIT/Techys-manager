@@ -2,26 +2,24 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
 import {
-  ArrowLeftIcon,
   PlusIcon,
   PencilIcon,
   TrashIcon,
+  ArrowLeftIcon,
   DocumentTextIcon,
-  KeyIcon,
+  CodeBracketIcon,
   BeakerIcon,
   LinkIcon,
-  EyeIcon,
-  EyeSlashIcon,
-  ClipboardDocumentIcon,
 } from "@heroicons/react/24/outline";
+import { LoadingPage } from "@/components/ui/LoadingSpinner";
 
 interface Project {
   id: string;
   name: string;
   description: string;
   deadline: string;
+  createdAt: string;
   _count?: {
     sections: number;
     materials: number;
@@ -30,33 +28,33 @@ interface Project {
 
 interface Material {
   id: string;
-  type: string;
+  type: "DOCUMENTATION" | "ENVIRONMENT_VAR" | "TEST_RESULT" | "LINK";
   title: string;
   content: string;
   url: string;
   category: string;
   isPublic: boolean;
-  createdBy: string;
   createdAt: string;
-  user: {
-    name: string;
-  };
 }
 
-export default function ProjectDetailPage() {
+export default function ProjectDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const projectId = params.id as string;
 
   const [project, setProject] = useState<Project | null>(null);
   const [materials, setMaterials] = useState<Material[]>([]);
-  const [showMaterialModal, setShowMaterialModal] = useState(false);
+  const [showModal, setShowModal] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<string>("ALL");
+  const [fetching, setFetching] = useState(true);
 
   const [formData, setFormData] = useState({
-    type: "DOCUMENTATION" as string,
+    type: "DOCUMENTATION" as
+      | "DOCUMENTATION"
+      | "ENVIRONMENT_VAR"
+      | "TEST_RESULT"
+      | "LINK",
     title: "",
     content: "",
     url: "",
@@ -65,9 +63,19 @@ export default function ProjectDetailPage() {
   });
 
   useEffect(() => {
-    fetchProject();
-    fetchMaterials();
+    if (projectId) {
+      fetchData();
+    }
   }, [projectId]);
+
+  const fetchData = async () => {
+    setFetching(true);
+    try {
+      await Promise.all([fetchProject(), fetchMaterials()]);
+    } finally {
+      setFetching(false);
+    }
+  };
 
   const fetchProject = async () => {
     try {
@@ -89,7 +97,7 @@ export default function ProjectDetailPage() {
     }
   };
 
-  const handleCreateMaterial = async (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
@@ -102,17 +110,21 @@ export default function ProjectDetailPage() {
 
       if (res.ok) {
         await fetchMaterials();
-        setShowMaterialModal(false);
+        setShowModal(false);
         resetForm();
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to create material");
       }
     } catch (error) {
       console.error("Error creating material:", error);
+      alert("Failed to create material");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleUpdateMaterial = async (e: React.FormEvent) => {
+  const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingMaterial) return;
     setLoading(true);
@@ -129,37 +141,47 @@ export default function ProjectDetailPage() {
 
       if (res.ok) {
         await fetchMaterials();
-        setShowMaterialModal(false);
+        setShowModal(false);
         resetForm();
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to update material");
       }
     } catch (error) {
       console.error("Error updating material:", error);
+      alert("Failed to update material");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDeleteMaterial = async (id: string) => {
+  const handleDelete = async (materialId: string) => {
     if (!confirm("Are you sure you want to delete this material?")) return;
 
     try {
-      const res = await fetch(`/api/projects/${projectId}/materials/${id}`, {
-        method: "DELETE",
-      });
+      const res = await fetch(
+        `/api/projects/${projectId}/materials/${materialId}`,
+        {
+          method: "DELETE",
+        },
+      );
 
       if (res.ok) {
         await fetchMaterials();
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to delete material");
       }
     } catch (error) {
       console.error("Error deleting material:", error);
+      alert("Failed to delete material");
     }
   };
 
-  const openCreateModal = (type: string) => {
+  const openCreateModal = () => {
     resetForm();
-    setFormData({ ...formData, type });
     setEditingMaterial(null);
-    setShowMaterialModal(true);
+    setShowModal(true);
   };
 
   const openEditModal = (material: Material) => {
@@ -172,7 +194,7 @@ export default function ProjectDetailPage() {
       category: material.category || "",
       isPublic: material.isPublic,
     });
-    setShowMaterialModal(true);
+    setShowModal(true);
   };
 
   const resetForm = () => {
@@ -187,17 +209,12 @@ export default function ProjectDetailPage() {
     setEditingMaterial(null);
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    alert("Copied to clipboard!");
-  };
-
   const getTypeIcon = (type: string) => {
     switch (type) {
       case "DOCUMENTATION":
         return <DocumentTextIcon className="w-5 h-5" />;
       case "ENVIRONMENT_VAR":
-        return <KeyIcon className="w-5 h-5" />;
+        return <CodeBracketIcon className="w-5 h-5" />;
       case "TEST_RESULT":
         return <BeakerIcon className="w-5 h-5" />;
       case "LINK":
@@ -207,7 +224,7 @@ export default function ProjectDetailPage() {
     }
   };
 
-  const getTypeColor = (type: string) => {
+  const getTypeBadgeColor = (type: string) => {
     switch (type) {
       case "DOCUMENTATION":
         return "bg-blue-100 text-blue-800";
@@ -222,252 +239,176 @@ export default function ProjectDetailPage() {
     }
   };
 
-  const filteredMaterials =
-    activeTab === "ALL"
-      ? materials
-      : materials.filter((m) => m.type === activeTab);
+  const formatType = (type: string) => {
+    return type.replace(/_/g, " ");
+  };
 
-  const materialTypes = [
-    { key: "ALL", label: "All", count: materials.length },
-    {
-      key: "DOCUMENTATION",
-      label: "Docs",
-      count: materials.filter((m) => m.type === "DOCUMENTATION").length,
-    },
-    {
-      key: "ENVIRONMENT_VAR",
-      label: "Env Vars",
-      count: materials.filter((m) => m.type === "ENVIRONMENT_VAR").length,
-    },
-    {
-      key: "TEST_RESULT",
-      label: "Tests",
-      count: materials.filter((m) => m.type === "TEST_RESULT").length,
-    },
-    {
-      key: "LINK",
-      label: "Links",
-      count: materials.filter((m) => m.type === "LINK").length,
-    },
-  ];
+  if (fetching) {
+    return <LoadingPage />;
+  }
 
   if (!project) {
-    return <div>Loading...</div>;
+    return (
+      <div className="text-center py-12">
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">
+          Project not found
+        </h2>
+        <p className="text-gray-600 mb-4">
+          The project you&apos;re looking for doesn&apos;t exist.
+        </p>
+        <button
+          onClick={() => router.push("/projects")}
+          className="text-primary-600 hover:text-primary-700"
+        >
+          ← Back to Projects
+        </button>
+      </div>
+    );
   }
 
   return (
     <div>
-      {/* Header */}
       <div className="mb-6">
-        <Link
-          href="/projects"
-          className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 mb-4"
+        <button
+          onClick={() => router.push("/projects")}
+          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4"
         >
-          <ArrowLeftIcon className="w-4 h-4 mr-2" />
+          <ArrowLeftIcon className="w-5 h-5" />
           Back to Projects
-        </Link>
+        </button>
 
-        <div className="flex items-start justify-between">
+        <div className="flex justify-between items-start">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">{project.name}</h1>
             <p className="text-gray-600 mt-2">{project.description}</p>
-            <div className="flex items-center gap-4 mt-4 text-sm text-gray-500">
-              <span>{project._count?.sections || 0} sections</span>
-              <span>•</span>
-              <span>{project._count?.materials || 0} materials</span>
+            <div className="flex gap-4 mt-4 text-sm text-gray-500">
+              <span>Sections: {project._count?.sections || 0}</span>
+              <span>Materials: {project._count?.materials || 0}</span>
               {project.deadline && (
-                <>
-                  <span>•</span>
-                  <span>
-                    Due: {new Date(project.deadline).toLocaleDateString()}
-                  </span>
-                </>
+                <span>
+                  Deadline: {new Date(project.deadline).toLocaleDateString()}
+                </span>
               )}
             </div>
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => router.push(`/projects/${projectId}/edit`)}
-              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
-            >
-              Edit Project
-            </button>
-          </div>
+          <button
+            onClick={openCreateModal}
+            className="flex items-center gap-2 bg-primary-500 text-white px-4 py-2 rounded-lg hover:bg-primary-600"
+          >
+            <PlusIcon className="w-5 h-5" />
+            Add Material
+          </button>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="border-b border-gray-200 mb-6">
-        <div className="flex gap-4">
-          {materialTypes.map((type) => (
-            <button
-              key={type.key}
-              onClick={() => setActiveTab(type.key)}
-              className={`px-4 py-2 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === type.key
-                  ? "border-primary-500 text-primary-600"
-                  : "border-transparent text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              {type.label} ({type.count})
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Quick Add Buttons */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <button
-          onClick={() => openCreateModal("DOCUMENTATION")}
-          className="flex items-center justify-center gap-2 p-4 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
-        >
-          <DocumentTextIcon className="w-5 h-5" />
-          <span className="font-medium">Add Docs</span>
-        </button>
-        <button
-          onClick={() => openCreateModal("ENVIRONMENT_VAR")}
-          className="flex items-center justify-center gap-2 p-4 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors"
-        >
-          <KeyIcon className="w-5 h-5" />
-          <span className="font-medium">Add Env Var</span>
-        </button>
-        <button
-          onClick={() => openCreateModal("TEST_RESULT")}
-          className="flex items-center justify-center gap-2 p-4 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 transition-colors"
-        >
-          <BeakerIcon className="w-5 h-5" />
-          <span className="font-medium">Add Test</span>
-        </button>
-        <button
-          onClick={() => openCreateModal("LINK")}
-          className="flex items-center justify-center gap-2 p-4 bg-orange-50 text-orange-700 rounded-lg hover:bg-orange-100 transition-colors"
-        >
-          <LinkIcon className="w-5 h-5" />
-          <span className="font-medium">Add Link</span>
-        </button>
-      </div>
-
-      {/* Materials List */}
-      {filteredMaterials.length === 0 ? (
+      {materials.length === 0 ? (
         <div className="bg-white rounded-lg shadow p-8 text-center">
           <DocumentTextIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">
             No materials yet
           </h3>
-          <p className="text-gray-600">
+          <p className="text-gray-600 mb-4">
             Add documentation, environment variables, test results, or links to
             this project.
           </p>
+          <button
+            onClick={openCreateModal}
+            className="inline-flex items-center gap-2 bg-primary-500 text-white px-4 py-2 rounded-lg hover:bg-primary-600"
+          >
+            <PlusIcon className="w-5 h-5" />
+            Add First Material
+          </button>
         </div>
       ) : (
-        <div className="space-y-4">
-          {filteredMaterials.map((material) => (
-            <div key={material.id} className="bg-white rounded-lg shadow p-6">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-start gap-4 flex-1">
-                  <div
-                    className={`p-2 rounded-lg ${getTypeColor(material.type)}`}
-                  >
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {materials.map((material) => (
+            <div
+              key={material.id}
+              className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow"
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="text-gray-600">
                     {getTypeIcon(material.type)}
                   </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-lg font-semibold text-gray-900">
-                        {material.title}
-                      </h3>
-                      {material.isPublic ? (
-                        <span className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
-                          <EyeIcon className="w-3 h-3" />
-                          Public
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-xs text-gray-600 bg-gray-50 px-2 py-1 rounded">
-                          <EyeSlashIcon className="w-3 h-3" />
-                          Private
-                        </span>
-                      )}
-                    </div>
-                    {material.category && (
-                      <span className="text-xs text-gray-500">
-                        {material.category}
-                      </span>
-                    )}
-                  </div>
+                  <span
+                    className={`text-xs px-2 py-1 rounded-full ${getTypeBadgeColor(material.type)}`}
+                  >
+                    {formatType(material.type)}
+                  </span>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-1">
                   <button
                     onClick={() => openEditModal(material)}
                     className="text-blue-600 hover:text-blue-800"
+                    title="Edit"
                   >
-                    <PencilIcon className="w-5 h-5" />
+                    <PencilIcon className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => handleDeleteMaterial(material.id)}
+                    onClick={() => handleDelete(material.id)}
                     className="text-red-600 hover:text-red-800"
+                    title="Delete"
                   >
-                    <TrashIcon className="w-5 h-5" />
+                    <TrashIcon className="w-4 h-4" />
                   </button>
                 </div>
               </div>
 
+              <h3 className="font-semibold text-gray-900 mb-2">
+                {material.title}
+              </h3>
+
               {material.content && (
-                <div className="bg-gray-50 rounded-lg p-4 mb-4 relative">
-                  <pre className="text-sm text-gray-800 whitespace-pre-wrap font-mono">
-                    {material.content}
-                  </pre>
-                  <button
-                    onClick={() => copyToClipboard(material.content)}
-                    className="absolute top-2 right-2 p-2 bg-white rounded-md shadow-sm hover:bg-gray-100"
-                    title="Copy to clipboard"
-                  >
-                    <ClipboardDocumentIcon className="w-4 h-4 text-gray-600" />
-                  </button>
-                </div>
+                <p className="text-sm text-gray-600 mb-3 line-clamp-3">
+                  {material.content}
+                </p>
               )}
 
               {material.url && (
-                <Link
+                <a
                   href={material.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-sm text-primary-600 hover:text-primary-800 mb-4"
+                  className="text-sm text-primary-600 hover:text-primary-700 break-all block"
                 >
-                  <LinkIcon className="w-4 h-4" />
                   {material.url}
-                </Link>
+                </a>
               )}
 
-              <div className="flex items-center justify-between text-xs text-gray-500 pt-4 border-t">
-                <span>Added by {material.user.name}</span>
-                <span>{new Date(material.createdAt).toLocaleString()}</span>
+              <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                <span className="text-xs text-gray-500">
+                  {material.category || "Uncategorized"}
+                </span>
+                {material.isPublic && (
+                  <span className="text-xs px-2 py-1 bg-green-100 text-green-800 rounded">
+                    Public
+                  </span>
+                )}
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Create/Edit Modal */}
-      {showMaterialModal && (
+      {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <h2 className="text-2xl font-bold mb-6">
               {editingMaterial ? "Edit Material" : "Add Material"}
             </h2>
 
-            <form
-              onSubmit={
-                editingMaterial ? handleUpdateMaterial : handleCreateMaterial
-              }
-            >
-              <div className="space-y-4">
+            <form onSubmit={editingMaterial ? handleUpdate : handleCreate}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Type *
                   </label>
                   <select
+                    required
                     value={formData.type}
                     onChange={(e) =>
-                      setFormData({ ...formData, type: e.target.value })
+                      setFormData({ ...formData, type: e.target.value as any })
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                   >
@@ -482,23 +423,7 @@ export default function ProjectDetailPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Title *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.title}
-                    onChange={(e) =>
-                      setFormData({ ...formData, title: e.target.value })
-                    }
-                    placeholder="e.g., API Documentation, DATABASE_URL, Unit Tests"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Category (optional)
+                    Category
                   </label>
                   <input
                     type="text"
@@ -506,67 +431,75 @@ export default function ProjectDetailPage() {
                     onChange={(e) =>
                       setFormData({ ...formData, category: e.target.value })
                     }
-                    placeholder="e.g., Backend, Frontend, Database"
+                    placeholder="e.g., API, Setup, Deployment"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                   />
                 </div>
+              </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Content
-                  </label>
-                  <textarea
-                    value={formData.content}
-                    onChange={(e) =>
-                      setFormData({ ...formData, content: e.target.value })
-                    }
-                    rows={8}
-                    placeholder={
-                      formData.type === "ENVIRONMENT_VAR"
-                        ? "KEY=value\nANOTHER_KEY=another_value"
-                        : formData.type === "TEST_RESULT"
-                          ? "Test results, coverage, logs..."
-                          : "Detailed content, code snippets, notes..."
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-sm"
-                  />
-                </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Title *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.title}
+                  onChange={(e) =>
+                    setFormData({ ...formData, title: e.target.value })
+                  }
+                  placeholder="e.g., API Documentation, Database URL"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    URL (optional)
-                  </label>
-                  <input
-                    type="url"
-                    value={formData.url}
-                    onChange={(e) =>
-                      setFormData({ ...formData, url: e.target.value })
-                    }
-                    placeholder="https://example.com"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
-                </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Content
+                </label>
+                <textarea
+                  value={formData.content}
+                  onChange={(e) =>
+                    setFormData({ ...formData, content: e.target.value })
+                  }
+                  rows={6}
+                  placeholder="Enter content, code, or notes..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-sm"
+                />
+              </div>
 
-                <div className="flex items-center">
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  URL
+                </label>
+                <input
+                  type="url"
+                  value={formData.url}
+                  onChange={(e) =>
+                    setFormData({ ...formData, url: e.target.value })
+                  }
+                  placeholder="https://example.com"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+
+              <div className="mb-6">
+                <label className="flex items-center gap-2">
                   <input
                     type="checkbox"
-                    id="isPublic"
                     checked={formData.isPublic}
                     onChange={(e) =>
                       setFormData({ ...formData, isPublic: e.target.checked })
                     }
                     className="w-4 h-4 text-primary-500 rounded focus:ring-primary-500"
                   />
-                  <label
-                    htmlFor="isPublic"
-                    className="ml-2 text-sm text-gray-700"
-                  >
-                    Make this public (visible to all team members)
-                  </label>
-                </div>
+                  <span className="text-sm font-medium text-gray-700">
+                    Make this material public
+                  </span>
+                </label>
               </div>
 
-              <div className="flex gap-3 mt-6">
+              <div className="flex gap-3">
                 <button
                   type="submit"
                   disabled={loading}
@@ -575,12 +508,12 @@ export default function ProjectDetailPage() {
                   {loading
                     ? "Saving..."
                     : editingMaterial
-                      ? "Update"
-                      : "Create"}
+                      ? "Update Material"
+                      : "Add Material"}
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowMaterialModal(false)}
+                  onClick={() => setShowModal(false)}
                   className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-300"
                 >
                   Cancel

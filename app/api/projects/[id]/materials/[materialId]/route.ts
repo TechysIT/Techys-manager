@@ -20,19 +20,12 @@ export async function PATCH(
     const material = await prisma.projectMaterial.update({
       where: { id: params.materialId },
       data: {
-        ...(type && { type }),
-        ...(title && { title }),
+        type,
+        title,
         content,
         url,
         category,
         isPublic,
-      },
-      include: {
-        user: {
-          select: {
-            name: true,
-          },
-        },
       },
     });
 

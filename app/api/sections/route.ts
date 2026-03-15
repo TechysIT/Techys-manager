@@ -1,32 +1,35 @@
-// app/api/sections/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { requireAuth, requirePermission, hasPermission } from "@/lib/permissions";
-import {
-  createSectionSchema,
-  sectionFiltersSchema,
-} from "@/lib/validations/schemas";
+import { checkPermission } from "@/lib/permissions";
 
 /**
  * GET /api/sections
- * List all sections with pagination and filters
+ * List all sections with optional filters
  * Permission: section:read
  */
 export async function GET(request: NextRequest) {
   try {
-    const session = await requirePermission("section", "read");
+    const session = await getServerSession(authOptions);
 
-    // Parse and validate query parameters
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (!checkPermission(session, "section", "read")) {
+      return NextResponse.json(
+        { error: "Forbidden: You don't have permission to view sections" },
+        { status: 403 },
+      );
+    }
+
+    // Parse query parameters
     const { searchParams } = new URL(request.url);
-    const filters = sectionFiltersSchema.parse({
-      page: searchParams.get("page") || "1",
-      limit: searchParams.get("limit") || "10",
-      projectId: searchParams.get("projectId") || undefined,
-      search: searchParams.get("search") || undefined,
-    });
-
-    const { page, limit, projectId, search } = filters;
-    const skip = (page - 1) * limit;
+    const projectId = searchParams.get("projectId");
+    const search = searchParams.get("search");
+    const page = parseInt(searchParams.get("page") || "1");
+    const limit = parseInt(searchParams.get("limit") || "50");
 
     // Build where clause
     const where: any = {};
@@ -42,11 +45,11 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    // Fetch sections with pagination
+    // Fetch sections
     const [sections, total] = await Promise.all([
       prisma.section.findMany({
         where,
-        skip,
+        skip: (page - 1) * limit,
         take: limit,
         include: {
           project: {
@@ -84,7 +87,7 @@ export async function GET(request: NextRequest) {
           },
         },
         orderBy: {
-          createdAt: "asc",
+          createdAt: "desc",
         },
       }),
       prisma.section.count({ where }),
@@ -99,27 +102,11 @@ export async function GET(request: NextRequest) {
         totalPages: Math.ceil(total / limit),
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Get sections error:", error);
-
-    if (error.message === "Unauthorized") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    if (error.message.startsWith("Forbidden")) {
-      return NextResponse.json({ error: error.message }, { status: 403 });
-    }
-
-    if (error.name === "ZodError") {
-      return NextResponse.json(
-        { error: "Invalid query parameters", details: error.errors },
-        { status: 400 }
-      );
-    }
-
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -131,24 +118,37 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const session = await requirePermission("section", "create");
+    const session = await getServerSession(authOptions);
 
-    // Parse and validate request body
-    const body = await request.json();
-    const validation = createSectionSchema.safeParse(body);
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    if (!validation.success) {
+    if (!checkPermission(session, "section", "create")) {
       return NextResponse.json(
-        {
-          error: "Validation failed",
-          details: validation.error.errors,
-        },
-        { status: 400 }
+        { error: "Forbidden: You don't have permission to create sections" },
+        { status: 403 },
       );
     }
 
-    const { name, description, deadline, projectId, assignedUserIds } =
-      validation.data;
+    // Parse request body
+    const body = await request.json();
+    const { name, description, deadline, projectId, assignedUserIds } = body;
+
+    // Validate required fields
+    if (!name || name.trim() === "") {
+      return NextResponse.json(
+        { error: "Section name is required" },
+        { status: 400 },
+      );
+    }
+
+    if (!projectId) {
+      return NextResponse.json(
+        { error: "Project ID is required" },
+        { status: 400 },
+      );
+    }
 
     // Verify project exists
     const project = await prisma.project.findUnique({
@@ -156,25 +156,24 @@ export async function POST(request: NextRequest) {
     });
 
     if (!project) {
-      return NextResponse.json(
-        { error: "Project not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
-    // Verify all assigned users exist
+    // Verify all assigned users exist if provided
     if (assignedUserIds && assignedUserIds.length > 0) {
-      const users = await prisma.user.findMany({
+      const allUsers = await prisma.user.findMany({
         where: {
           id: { in: assignedUserIds },
-          isActive: true,
         },
       });
 
-      if (users.length !== assignedUserIds.length) {
+      // Filter out suspended users
+      const activeUsers = allUsers.filter((user) => !user.suspended);
+
+      if (activeUsers.length !== assignedUserIds.length) {
         return NextResponse.json(
-          { error: "One or more assigned users not found or inactive" },
-          { status: 400 }
+          { error: "One or more assigned users not found or are suspended" },
+          { status: 400 },
         );
       }
     }
@@ -182,17 +181,18 @@ export async function POST(request: NextRequest) {
     // Create section with assignments
     const section = await prisma.section.create({
       data: {
-        name,
-        description,
+        name: name.trim(),
+        description: description?.trim() || null,
         deadline: deadline ? new Date(deadline) : null,
         projectId,
-        assignments: assignedUserIds
-          ? {
-              create: assignedUserIds.map((userId) => ({
-                userId,
-              })),
-            }
-          : undefined,
+        assignments:
+          assignedUserIds && assignedUserIds.length > 0
+            ? {
+                create: assignedUserIds.map((userId: string) => ({
+                  userId,
+                })),
+              }
+            : undefined,
       },
       include: {
         project: {
@@ -225,22 +225,13 @@ export async function POST(request: NextRequest) {
         message: "Section created successfully",
         section,
       },
-      { status: 201 }
+      { status: 201 },
     );
-  } catch (error: any) {
+  } catch (error) {
     console.error("Create section error:", error);
-
-    if (error.message === "Unauthorized") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    if (error.message.startsWith("Forbidden")) {
-      return NextResponse.json({ error: error.message }, { status: 403 });
-    }
-
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { PlusIcon, PencilIcon, TrashIcon } from "@heroicons/react/24/outline";
 import Link from "next/link";
 import { LoadingCard } from "@/components/ui/LoadingSpinner";
+import { toast } from "sonner";
 
 interface Project {
   id: string;
@@ -18,7 +19,7 @@ export default function ProjectsPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(false);
-  const [fetching, setFetching] = useState(true); // ADD THIS - for initial load
+  const [fetching, setFetching] = useState(true);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -26,25 +27,39 @@ export default function ProjectsPage() {
     deadline: "",
   });
 
-  // Fetch projects - NOW WITH LOADING STATE
-  const fetchProjects = async () => {
-    setFetching(true); // ADD THIS
-    try {
-      const res = await fetch("/api/projects");
-      const data = await res.json();
-      setProjects(data.projects || []);
-    } catch (error) {
-      console.error("Error fetching projects:", error);
-    } finally {
-      setFetching(false); // ADD THIS
-    }
-  };
-
   useEffect(() => {
     fetchProjects();
   }, []);
 
-  // Create project
+  const fetchProjects = async () => {
+    setFetching(true);
+    try {
+      const res = await fetch("/api/projects");
+      const data = await res.json();
+
+      if (res.status === 403) {
+        toast.error("Permission Denied", {
+          description:
+            data.error || "You don't have permission to view projects",
+        });
+        setProjects([]);
+      } else if (res.ok) {
+        setProjects(data.projects || []);
+      } else {
+        toast.error("Error", {
+          description: data.error || "Failed to fetch projects",
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching projects:", error);
+      toast.error("Network Error", {
+        description: "Failed to connect to the server",
+      });
+    } finally {
+      setFetching(false);
+    }
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -56,19 +71,57 @@ export default function ProjectsPage() {
         body: JSON.stringify(formData),
       });
 
+      const data = await res.json();
+
       if (res.ok) {
+        toast.success("Success!", {
+          description: `Project "${formData.name}" created successfully`,
+        });
         await fetchProjects();
         setShowModal(false);
         resetForm();
+      } else if (res.status === 403) {
+        toast.error("Permission Denied", {
+          description: data.error,
+          duration: 5000,
+          action: data.requiredPermission
+            ? {
+                label: "Details",
+                onClick: () => {
+                  toast.info("Required Permission", {
+                    description: `You need: ${data.requiredPermission}\n\nYour permissions: ${data.yourPermissions?.join(", ") || "None"}`,
+                    duration: 10000,
+                  });
+                },
+              }
+            : undefined,
+        });
+      } else if (res.status === 400) {
+        toast.error("Invalid Data", {
+          description: data.error || "Please check your input",
+        });
+      } else if (res.status === 401) {
+        toast.error("Not Authenticated", {
+          description: "Please login again",
+        });
+        setTimeout(() => {
+          window.location.href = "/login";
+        }, 2000);
+      } else {
+        toast.error("Error", {
+          description: data.error || "Failed to create project",
+        });
       }
     } catch (error) {
       console.error("Error creating project:", error);
+      toast.error("Network Error", {
+        description: "Failed to create project",
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  // Update project
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProject) return;
@@ -81,33 +134,80 @@ export default function ProjectsPage() {
         body: JSON.stringify(formData),
       });
 
+      const data = await res.json();
+
       if (res.ok) {
+        toast.success("Success!", {
+          description: `Project "${formData.name}" updated successfully`,
+        });
         await fetchProjects();
         setShowModal(false);
         resetForm();
+      } else if (res.status === 403) {
+        toast.error("Permission Denied", {
+          description:
+            data.error || "You don't have permission to update projects",
+        });
+      } else {
+        toast.error("Error", {
+          description: data.error || "Failed to update project",
+        });
       }
     } catch (error) {
       console.error("Error updating project:", error);
+      toast.error("Network Error", {
+        description: "Failed to update project",
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  // Delete project
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this project?")) return;
+    const project = projects.find((p) => p.id === id);
 
-    try {
-      const res = await fetch(`/api/projects/${id}`, {
-        method: "DELETE",
-      });
+    // Use toast for confirmation
+    toast.warning("Delete Project?", {
+      description: `Are you sure you want to delete "${project?.name}"?`,
+      duration: 10000,
+      action: {
+        label: "Delete",
+        onClick: async () => {
+          try {
+            const res = await fetch(`/api/projects/${id}`, {
+              method: "DELETE",
+            });
 
-      if (res.ok) {
-        await fetchProjects();
-      }
-    } catch (error) {
-      console.error("Error deleting project:", error);
-    }
+            const data = await res.json();
+
+            if (res.ok) {
+              toast.success("Deleted!", {
+                description: `Project "${project?.name}" deleted successfully`,
+              });
+              await fetchProjects();
+            } else if (res.status === 403) {
+              toast.error("Permission Denied", {
+                description:
+                  data.error || "You don't have permission to delete projects",
+              });
+            } else {
+              toast.error("Error", {
+                description: data.error || "Failed to delete project",
+              });
+            }
+          } catch (error) {
+            console.error("Error deleting project:", error);
+            toast.error("Network Error", {
+              description: "Failed to delete project",
+            });
+          }
+        },
+      },
+      cancel: {
+        label: "Cancel",
+        onClick: () => {},
+      },
+    });
   };
 
   const openCreateModal = () => {
@@ -131,7 +231,6 @@ export default function ProjectsPage() {
     setEditingProject(null);
   };
 
-  // SHOW LOADING SKELETON ON INITIAL LOAD
   if (fetching) {
     return (
       <div>
@@ -164,7 +263,6 @@ export default function ProjectsPage() {
         </button>
       </div>
 
-      {/* Projects Grid */}
       {projects.length === 0 ? (
         <div className="bg-white rounded-lg shadow p-8 text-center">
           <svg
@@ -251,7 +349,6 @@ export default function ProjectsPage() {
         </div>
       )}
 
-      {/* Create/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-8 max-w-md w-full">

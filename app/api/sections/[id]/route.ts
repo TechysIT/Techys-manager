@@ -1,8 +1,8 @@
-// app/api/sections/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { requireAuth, hasPermission } from "@/lib/permissions";
-import { updateSectionSchema } from "@/lib/validations/schemas";
+import { checkPermission } from "@/lib/permissions";
 
 /**
  * GET /api/sections/[id]
@@ -11,20 +11,23 @@ import { updateSectionSchema } from "@/lib/validations/schemas";
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } },
 ) {
   try {
-    const session = await requireAuth();
-    const sectionId = params.id;
+    const session = await getServerSession(authOptions);
 
-    const canRead = hasPermission("section", "read", session.user.permissions);
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    if (!canRead) {
+    if (!checkPermission(session, "section", "read")) {
       return NextResponse.json(
-        { error: "Forbidden: Missing section:read permission" },
-        { status: 403 }
+        { error: "Forbidden: You don't have permission to view sections" },
+        { status: 403 },
       );
     }
+
+    const sectionId = params.id;
 
     // Fetch section with all related data
     const section = await prisma.section.findUnique({
@@ -84,16 +87,11 @@ export async function GET(
     }
 
     return NextResponse.json({ section });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Get section error:", error);
-
-    if (error.message === "Unauthorized") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -105,24 +103,23 @@ export async function GET(
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } },
 ) {
   try {
-    const session = await requireAuth();
-    const sectionId = params.id;
+    const session = await getServerSession(authOptions);
 
-    const canUpdate = hasPermission(
-      "section",
-      "update",
-      session.user.permissions
-    );
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    if (!canUpdate) {
+    if (!checkPermission(session, "section", "update")) {
       return NextResponse.json(
-        { error: "Forbidden: Missing section:update permission" },
-        { status: 403 }
+        { error: "Forbidden: You don't have permission to update sections" },
+        { status: 403 },
       );
     }
+
+    const sectionId = params.id;
 
     // Check if section exists
     const existingSection = await prisma.section.findUnique({
@@ -133,35 +130,33 @@ export async function PATCH(
       return NextResponse.json({ error: "Section not found" }, { status: 404 });
     }
 
-    // Parse and validate request body
+    // Parse request body
     const body = await request.json();
-    const validation = updateSectionSchema.safeParse(body);
+    const { name, description, deadline, assignedUserIds } = body;
 
-    if (!validation.success) {
+    // Validate name if provided
+    if (name !== undefined && (!name || name.trim() === "")) {
       return NextResponse.json(
-        {
-          error: "Validation failed",
-          details: validation.error.errors,
-        },
-        { status: 400 }
+        { error: "Section name cannot be empty" },
+        { status: 400 },
       );
     }
 
-    const { name, description, deadline, assignedUserIds } = validation.data;
-
     // Verify all assigned users exist if provided
     if (assignedUserIds && assignedUserIds.length > 0) {
-      const users = await prisma.user.findMany({
+      const allUsers = await prisma.user.findMany({
         where: {
           id: { in: assignedUserIds },
-          isActive: true,
         },
       });
 
-      if (users.length !== assignedUserIds.length) {
+      // Filter out suspended users
+      const activeUsers = allUsers.filter((user) => !user.suspended);
+
+      if (activeUsers.length !== assignedUserIds.length) {
         return NextResponse.json(
-          { error: "One or more assigned users not found or inactive" },
-          { status: 400 }
+          { error: "One or more assigned users not found or are suspended" },
+          { status: 400 },
         );
       }
     }
@@ -170,15 +165,17 @@ export async function PATCH(
     const updatedSection = await prisma.section.update({
       where: { id: sectionId },
       data: {
-        ...(name !== undefined && { name }),
-        ...(description !== undefined && { description }),
+        ...(name !== undefined && { name: name.trim() }),
+        ...(description !== undefined && {
+          description: description?.trim() || null,
+        }),
         ...(deadline !== undefined && {
           deadline: deadline ? new Date(deadline) : null,
         }),
         ...(assignedUserIds && {
           assignments: {
             deleteMany: {},
-            create: assignedUserIds.map((userId) => ({
+            create: assignedUserIds.map((userId: string) => ({
               userId,
             })),
           },
@@ -221,16 +218,11 @@ export async function PATCH(
       message: "Section updated successfully",
       section: updatedSection,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Update section error:", error);
-
-    if (error.message === "Unauthorized") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -242,24 +234,23 @@ export async function PATCH(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } },
 ) {
   try {
-    const session = await requireAuth();
-    const sectionId = params.id;
+    const session = await getServerSession(authOptions);
 
-    const canDelete = hasPermission(
-      "section",
-      "delete",
-      session.user.permissions
-    );
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    if (!canDelete) {
+    if (!checkPermission(session, "section", "delete")) {
       return NextResponse.json(
-        { error: "Forbidden: Missing section:delete permission" },
-        { status: 403 }
+        { error: "Forbidden: You don't have permission to delete sections" },
+        { status: 403 },
       );
     }
+
+    const sectionId = params.id;
 
     // Check if section exists
     const section = await prisma.section.findUnique({
@@ -286,16 +277,11 @@ export async function DELETE(
       message: "Section deleted successfully",
       deletedTasks: section._count.tasks,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Delete section error:", error);
-
-    if (error.message === "Unauthorized") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     return NextResponse.json(
       { error: "Internal server error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

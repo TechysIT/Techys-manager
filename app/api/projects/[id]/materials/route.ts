@@ -19,13 +19,13 @@ export async function GET(
       include: {
         user: {
           select: {
+            id: true,
             name: true,
+            email: true,
           },
         },
       },
-      orderBy: {
-        createdAt: "desc",
-      },
+      orderBy: { createdAt: "desc" },
     });
 
     return NextResponse.json({ materials });
@@ -62,13 +62,6 @@ export async function POST(
         category,
         isPublic: isPublic || false,
         createdBy: session.user.id,
-      },
-      include: {
-        user: {
-          select: {
-            name: true,
-          },
-        },
       },
     });
 
