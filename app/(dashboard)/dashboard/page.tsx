@@ -3,14 +3,14 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
+
 import {
   FolderIcon,
   CheckCircleIcon,
-  ClockIcon,
   UsersIcon,
   ChartBarIcon,
-  ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
+import { LoadingPage } from "@/components/ui/LoadingSpinner";
 
 interface DashboardStats {
   totalProjects: number;
@@ -62,6 +62,7 @@ export default function DashboardPage() {
   }, []);
 
   const fetchDashboardData = async () => {
+    setLoading(true);
     try {
       const res = await fetch("/api/dashboard/stats");
       const data = await res.json();
@@ -88,28 +89,8 @@ export default function DashboardPage() {
     }
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case "HIGH":
-        return "text-red-600";
-      case "MEDIUM":
-        return "text-yellow-600";
-      case "LOW":
-        return "text-green-600";
-      default:
-        return "text-gray-600";
-    }
-  };
-
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading dashboard...</p>
-        </div>
-      </div>
-    );
+    return <LoadingPage />;
   }
 
   return (
@@ -215,7 +196,7 @@ export default function DashboardPage() {
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div
-                  className="bg-gray-400 h-2 rounded-full"
+                  className="bg-gray-400 h-2 rounded-full transition-all duration-500"
                   style={{
                     width: `${
                       stats?.totalTasks
@@ -237,7 +218,7 @@ export default function DashboardPage() {
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div
-                  className="bg-blue-500 h-2 rounded-full"
+                  className="bg-blue-500 h-2 rounded-full transition-all duration-500"
                   style={{
                     width: `${
                       stats?.totalTasks
@@ -260,7 +241,7 @@ export default function DashboardPage() {
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div
-                  className="bg-green-500 h-2 rounded-full"
+                  className="bg-green-500 h-2 rounded-full transition-all duration-500"
                   style={{
                     width: `${
                       stats?.totalTasks

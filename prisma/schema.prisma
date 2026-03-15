@@ -97,7 +97,8 @@ model User {
   taskAssignments    TaskAssignment[]
   comments          Comment[]
   weeklyReports     WeeklyReport[]
-
+  projectMaterials  ProjectMaterial[] 
+  
   @@index([email])
   @@index([roleId])
   @@index([isActive])
@@ -119,6 +120,7 @@ model Project {
   sections    Section[]
   assignments ProjectAssignment[]
 
+  materials   ProjectMaterial[]  
   @@index([name])
   @@index([deadline])
 }
@@ -264,4 +266,36 @@ model WeeklyReport {
   @@index([userId])
   @@index([weekStart])
   @@index([weekEnd])
+}
+
+
+
+model ProjectMaterial {
+  id          String   @id @default(cuid())
+  projectId   String
+  type        MaterialType
+  title       String
+  content     String?  @db.Text
+  url         String?
+  category    String?
+  isPublic    Boolean  @default(false)
+  createdBy   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [createdBy], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([createdBy])
+  @@index([type])
+  @@index([category])
+}
+
+enum MaterialType {
+  DOCUMENTATION
+  ENVIRONMENT_VAR
+  TEST_RESULT
+  LINK
+  FILE
+  NOTE
 }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { PlusIcon, PencilIcon, TrashIcon } from "@heroicons/react/24/outline";
+import { LoadingCard } from "@/components/ui/LoadingSpinner";
 
 interface Task {
   id: string;
@@ -197,7 +198,26 @@ export default function TasksPage() {
     { id: "IN_PROGRESS", title: "In Progress", status: "IN_PROGRESS" as const },
     { id: "DONE", title: "Done", status: "DONE" as const },
   ];
-
+  if (loading && tasks.length === 0) {
+    return (
+      <div>
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Tasks</h1>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {["TODO", "IN_PROGRESS", "DONE"].map((status) => (
+            <div key={status} className="bg-gray-50 rounded-lg p-4">
+              <h3 className="font-semibold text-gray-900 mb-4">{status}</h3>
+              <div className="space-y-3">
+                <LoadingCard />
+                <LoadingCard />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
   return (
     <div>
       <div className="flex justify-between items-center mb-6">

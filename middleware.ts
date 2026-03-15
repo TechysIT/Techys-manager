@@ -1,59 +1,30 @@
-import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
-export default withAuth(
-  function middleware(req) {
-    const token = req.nextauth.token;
-    const path = req.nextUrl.pathname;
+export function middleware(request: NextRequest) {
+  const path = request.nextUrl.pathname;
 
-    // If no token, redirect to login
-    if (!token) {
-      return NextResponse.redirect(new URL("/login", req.url));
-    }
+  // Public paths that don't require authentication
+  const isPublicPath =
+    path === "/login" || path === "/api/auth/callback/credentials";
 
-    // Get user permissions from token
-    const permissions = (token.permissions as any[]) || [];
+  // Get token from cookies
+  const token =
+    request.cookies.get("next-auth.session-token")?.value ||
+    request.cookies.get("__Secure-next-auth.session-token")?.value;
 
-    // Helper function to check permission
-    const hasPermission = (resource: string, action: string) => {
-      return permissions.some(
-        (p) => p.resource === resource && p.action === action,
-      );
-    };
+  // Redirect to login if accessing protected route without token
+  if (!isPublicPath && !token) {
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
 
-    // Check permissions based on route
-    if (path.startsWith("/projects")) {
-      if (!hasPermission("project", "read")) {
-        return NextResponse.redirect(new URL("/dashboard", req.url));
-      }
-    }
+  // Redirect to dashboard if accessing login with token
+  if (isPublicPath && token && path === "/login") {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
 
-    if (path.startsWith("/sections")) {
-      if (!hasPermission("section", "read")) {
-        return NextResponse.redirect(new URL("/dashboard", req.url));
-      }
-    }
-
-    if (path.startsWith("/tasks")) {
-      if (!hasPermission("task", "read")) {
-        return NextResponse.redirect(new URL("/dashboard", req.url));
-      }
-    }
-
-    if (path.startsWith("/reports")) {
-      if (!hasPermission("report", "read")) {
-        return NextResponse.redirect(new URL("/dashboard", req.url));
-      }
-    }
-
-    return NextResponse.next();
-  },
-  {
-    callbacks: {
-      authorized: ({ token }) => !!token,
-    },
-  },
-);
+  return NextResponse.next();
+}
 
 export const config = {
   matcher: [
@@ -62,5 +33,9 @@ export const config = {
     "/sections/:path*",
     "/tasks/:path*",
     "/reports/:path*",
+    "/users/:path*",
+    "/roles/:path*",
+    "/profile/:path*",
+    "/login",
   ],
 };

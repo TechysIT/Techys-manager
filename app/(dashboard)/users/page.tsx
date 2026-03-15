@@ -8,6 +8,7 @@ import {
   LockClosedIcon,
   LockOpenIcon,
 } from "@heroicons/react/24/outline";
+import { LoadingTable } from "@/components/ui/LoadingSpinner";
 
 interface User {
   id: string;
@@ -33,6 +34,7 @@ export default function UsersPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true); // ADD THIS
 
   const [formData, setFormData] = useState({
     name: "",
@@ -42,9 +44,18 @@ export default function UsersPage() {
   });
 
   useEffect(() => {
-    fetchUsers();
-    fetchRoles();
+    fetchData();
   }, []);
+
+  // COMBINED FETCH WITH LOADING STATE
+  const fetchData = async () => {
+    setFetching(true);
+    try {
+      await Promise.all([fetchUsers(), fetchRoles()]);
+    } finally {
+      setFetching(false);
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -200,6 +211,22 @@ export default function UsersPage() {
         return "bg-gray-100 text-gray-800";
     }
   };
+
+  // SHOW LOADING STATE
+  if (fetching) {
+    return (
+      <div>
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
+          <button className="flex items-center gap-2 bg-primary-500 text-white px-4 py-2 rounded-lg">
+            <PlusIcon className="w-5 h-5" />
+            Add User
+          </button>
+        </div>
+        <LoadingTable />
+      </div>
+    );
+  }
 
   return (
     <div>

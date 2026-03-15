@@ -7,6 +7,7 @@ import {
   TrashIcon,
   ShieldCheckIcon,
 } from "@heroicons/react/24/outline";
+import { LoadingCard } from "@/components/ui/LoadingSpinner";
 
 interface Permission {
   id: string;
@@ -35,6 +36,7 @@ export default function RolesPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true); // ADD THIS
 
   const [formData, setFormData] = useState({
     name: "",
@@ -43,9 +45,18 @@ export default function RolesPage() {
   });
 
   useEffect(() => {
-    fetchRoles();
-    fetchPermissions();
+    fetchData();
   }, []);
+
+  // COMBINED FETCH WITH LOADING STATE
+  const fetchData = async () => {
+    setFetching(true);
+    try {
+      await Promise.all([fetchRoles(), fetchPermissions()]);
+    } finally {
+      setFetching(false);
+    }
+  };
 
   const fetchRoles = async () => {
     try {
@@ -230,6 +241,31 @@ export default function RolesPage() {
         return "bg-purple-100 text-purple-800";
     }
   };
+
+  // SHOW LOADING STATE
+  if (fetching) {
+    return (
+      <div>
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">
+              Role Management
+            </h1>
+            <p className="text-gray-600 mt-1">Manage roles and permissions</p>
+          </div>
+          <button className="flex items-center gap-2 bg-primary-500 text-white px-4 py-2 rounded-lg">
+            <PlusIcon className="w-5 h-5" />
+            Create Role
+          </button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <LoadingCard />
+          <LoadingCard />
+          <LoadingCard />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>

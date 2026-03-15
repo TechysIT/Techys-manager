@@ -1,12 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import {
-  PlusIcon,
-  PencilIcon,
-  TrashIcon,
-  UserPlusIcon,
-} from "@heroicons/react/24/outline";
+import { PlusIcon, PencilIcon, TrashIcon } from "@heroicons/react/24/outline";
+import { LoadingTable } from "@/components/ui/LoadingSpinner";
 
 interface Section {
   id: string;
@@ -33,6 +29,7 @@ export default function SectionsPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingSection, setEditingSection] = useState<Section | null>(null);
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true); // ADD THIS
 
   const [formData, setFormData] = useState({
     name: "",
@@ -42,9 +39,18 @@ export default function SectionsPage() {
   });
 
   useEffect(() => {
-    fetchSections();
-    fetchProjects();
+    fetchData();
   }, []);
+
+  // COMBINED FETCH FUNCTION WITH LOADING STATE
+  const fetchData = async () => {
+    setFetching(true);
+    try {
+      await Promise.all([fetchSections(), fetchProjects()]);
+    } finally {
+      setFetching(false);
+    }
+  };
 
   const fetchSections = async () => {
     try {
@@ -157,6 +163,22 @@ export default function SectionsPage() {
     setEditingSection(null);
   };
 
+  // SHOW LOADING STATE
+  if (fetching) {
+    return (
+      <div>
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Sections</h1>
+          <button className="flex items-center gap-2 bg-primary-500 text-white px-4 py-2 rounded-lg">
+            <PlusIcon className="w-5 h-5" />
+            Create Section
+          </button>
+        </div>
+        <LoadingTable />
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -247,12 +269,14 @@ export default function SectionsPage() {
                     <button
                       onClick={() => openEditModal(section)}
                       className="text-blue-600 hover:text-blue-900 mr-4"
+                      title="Edit"
                     >
                       <PencilIcon className="w-5 h-5 inline" />
                     </button>
                     <button
                       onClick={() => handleDelete(section.id)}
                       className="text-red-600 hover:text-red-900"
+                      title="Delete"
                     >
                       <TrashIcon className="w-5 h-5 inline" />
                     </button>

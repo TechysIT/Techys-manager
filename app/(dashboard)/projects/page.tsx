@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { PlusIcon, PencilIcon, TrashIcon } from "@heroicons/react/24/outline";
+import Link from "next/link";
+import { LoadingCard } from "@/components/ui/LoadingSpinner";
 
 interface Project {
   id: string;
@@ -16,6 +18,7 @@ export default function ProjectsPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true); // ADD THIS - for initial load
 
   const [formData, setFormData] = useState({
     name: "",
@@ -23,14 +26,17 @@ export default function ProjectsPage() {
     deadline: "",
   });
 
-  // Fetch projects
+  // Fetch projects - NOW WITH LOADING STATE
   const fetchProjects = async () => {
+    setFetching(true); // ADD THIS
     try {
       const res = await fetch("/api/projects");
       const data = await res.json();
       setProjects(data.projects || []);
     } catch (error) {
       console.error("Error fetching projects:", error);
+    } finally {
+      setFetching(false); // ADD THIS
     }
   };
 
@@ -125,6 +131,26 @@ export default function ProjectsPage() {
     setEditingProject(null);
   };
 
+  // SHOW LOADING SKELETON ON INITIAL LOAD
+  if (fetching) {
+    return (
+      <div>
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Projects</h1>
+          <button className="flex items-center gap-2 bg-primary-500 text-white px-4 py-2 rounded-lg">
+            <PlusIcon className="w-5 h-5" />
+            Create Project
+          </button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <LoadingCard />
+          <LoadingCard />
+          <LoadingCard />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -173,6 +199,31 @@ export default function ProjectsPage() {
                   {project.name}
                 </h3>
                 <div className="flex gap-2">
+                  <Link
+                    href={`/projects/${project.id}`}
+                    className="text-blue-600 hover:text-blue-800"
+                    title="View Details"
+                  >
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                      />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                      />
+                    </svg>
+                  </Link>
                   <button
                     onClick={() => openEditModal(project)}
                     className="text-blue-600 hover:text-blue-800"

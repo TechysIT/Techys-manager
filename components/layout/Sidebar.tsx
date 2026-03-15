@@ -73,24 +73,26 @@ export function Sidebar() {
       <div className="px-4 py-4 border-t border-gray-800">
         {/* User Info */}
         {session?.user && (
-          <div className="px-2 py-4 border-b border-gray-800">
-            <div className="flex items-center space-x-3">
-              <div className="h-10 w-10 rounded-full bg-primary-500 flex items-center justify-center text-white font-semibold">
-                {session.user.name?.charAt(0).toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">
-                  {session.user.name}
-                </p>
-                <p className="text-xs text-gray-400 truncate">
-                  {session.user.email}
-                </p>
-                <p className="text-xs text-primary-400 mt-1">
-                  {session.user.role}
-                </p>
+          <Link href="/profile">
+            <div className="px-2 py-4 border-b border-gray-800">
+              <div className="flex items-center space-x-3">
+                <div className="h-10 w-10 rounded-full bg-primary-500 flex items-center justify-center text-white font-semibold">
+                  {session.user.name?.charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-white truncate">
+                    {session.user.name}
+                  </p>
+                  <p className="text-xs text-gray-400 truncate">
+                    {session.user.email}
+                  </p>
+                  <p className="text-xs text-primary-400 mt-1">
+                    {session.user.role}
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
+          </Link>
         )}
         <button
           onClick={() => signOut({ callbackUrl: "/login" })}
