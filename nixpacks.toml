@@ -9,8 +9,9 @@ commands = [
   "npx prisma migrate deploy"
 ]
 
-[phases.start]
-commands = ["npm run start"]
+[start]
+cmd = "npm run start"
+
 
 [env]
 DATABASE_URL = "${DATABASE_URL}"
