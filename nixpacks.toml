@@ -1,12 +1,11 @@
 [phases.setup]
 commands = ["npm install"]
-node_version = "20"  # or 22 if you want
+node_version = "20"
 
 [phases.build]
 commands = [
   "npm run build",
-  "npx prisma migrate deploy",
-  "npm run db:seed"
+  "npx prisma migrate deploy"
 ]
 
 [phases.start]
