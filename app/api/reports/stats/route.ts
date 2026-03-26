@@ -55,7 +55,14 @@ export async function GET(request: NextRequest) {
         const created = new Date(t.createdAt);
         return created >= weekStart && created < weekEnd;
       });
+      type WeeklyDataItem = {
+        week: string;
+        completed: number;
+        pending: number;
+        overdue: number;
+      };
 
+      const weeklyData: WeeklyDataItem[] = [];
       weeklyData.push({
         week: `Week ${4 - i}`,
         completed: weekTasks.filter((t) => t.status === "DONE").length,
@@ -126,7 +133,8 @@ export async function GET(request: NextRequest) {
           late,
         };
       })
-      .filter((u) => u.tasksCompleted > 0);
+      .filter((u) => u.tasksCompleted > 0); // Only show users with completed tasks
+
     return NextResponse.json({
       stats: {
         totalTasks,
