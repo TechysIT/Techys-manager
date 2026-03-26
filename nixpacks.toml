@@ -1,0 +1,29 @@
+[phases.setup]
+commands = [
+  # Install Node modules
+  "npm install"
+]
+
+[phases.build]
+commands = [
+  # Build Next.js
+  "npm run build",
+  
+  # Deploy Prisma migrations
+  "npx prisma migrate deploy",
+  
+  # Optional: Seed the database
+  "npm run db:seed"
+]
+
+[phases.start]
+commands = [
+  # Start Next.js in production
+  "npm run start"
+]
+
+[env]
+# Environment variables can also be set here or in Coolify dashboard
+DATABASE_URL = "${DATABASE_URL}"
+NEXTAUTH_URL = "${NEXTAUTH_URL}"
+NEXTAUTH_SECRET = "${NEXTAUTH_SECRET}"
