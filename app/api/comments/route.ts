@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
     // Check permission: either has comment:read OR is assigned to the task
     const hasReadPermission = checkPermission(session, "comment", "read");
     const isAssignedToTask = task.assignments.some(
-      (assignment) => assignment.userId === session.user.id,
+      (assignment: { userId: string }) => assignment.userId === session.user.id,
     );
 
     if (!hasReadPermission && !isAssignedToTask) {
@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
     // Check permission: either has comment:create OR is assigned to the task
     const hasCreatePermission = checkPermission(session, "comment", "create");
     const isAssignedToTask = task.assignments.some(
-      (assignment) => assignment.userId === session.user.id,
+      (assignment: { userId: string }) => assignment.userId === session.user.id,
     );
 
     if (!hasCreatePermission && !isAssignedToTask) {
