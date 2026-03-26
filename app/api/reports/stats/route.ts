@@ -126,8 +126,7 @@ export async function GET(request: NextRequest) {
           late,
         };
       })
-      .filter((u) => u.tasksCompleted > 0); // Only show users with completed tasks
-
+      .filter((u) => u.tasksCompleted > 0);
     return NextResponse.json({
       stats: {
         totalTasks,
