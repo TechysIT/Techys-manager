@@ -1,9 +1,11 @@
 [phases.setup]
 commands = ["npm install"]
+node_version = "20"
 
 [phases.build]
 commands = [
   "npm run build",
+  "npx prisma generate",
   "npx prisma migrate deploy"
 ]
 
