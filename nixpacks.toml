@@ -1,6 +1,5 @@
 [phases.setup]
 commands = ["npm install"]
-node_version = "20"
 
 [phases.build]
 commands = [
