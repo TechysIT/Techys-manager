@@ -6,7 +6,9 @@ export function middleware(request: NextRequest) {
 
   // Public paths that don't require authentication
   const isPublicPath =
-    path === "/login" || path === "/api/auth/callback/credentials";
+    path === "/" ||
+    path === "/login" ||
+    path === "/api/auth/callback/credentials";
 
   // Get token from cookies
   const token =
