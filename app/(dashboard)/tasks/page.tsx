@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { PlusIcon, PencilIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { LoadingCard } from "@/components/ui/LoadingSpinner";
+import { toast } from "sonner";
 
 interface Task {
   id: string;
@@ -125,20 +126,43 @@ export default function TasksPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this task?")) return;
+  const handleDelete = (id: string) => {
+    const task = tasks.find((t) => t.id === id);
+    if (!task) return;
 
-    try {
-      const res = await fetch(`/api/tasks/${id}`, {
-        method: "DELETE",
-      });
+    toast.warning("Delete Task?", {
+      description: `Are you sure you want to delete "${task.title}"?`,
+      duration: 10000, // 10 seconds
+      action: {
+        label: "Delete",
+        onClick: async () => {
+          try {
+            const res = await fetch(`/api/tasks/${id}`, { method: "DELETE" });
+            const data = await res.json();
 
-      if (res.ok) {
-        await fetchTasks();
-      }
-    } catch (error) {
-      console.error("Error deleting task:", error);
-    }
+            if (res.ok) {
+              toast.success("Deleted!", {
+                description: `Task "${task.title}" deleted successfully`,
+              });
+              await fetchTasks();
+            } else {
+              toast.error("Error", {
+                description: data.error || "Failed to delete task",
+              });
+            }
+          } catch (error) {
+            console.error("Error deleting task:", error);
+            toast.error("Network Error", {
+              description: "Failed to delete task",
+            });
+          }
+        },
+      },
+      cancel: {
+        label: "Cancel",
+        onClick: () => {}, // optional
+      },
+    });
   };
 
   const updateTaskStatus = async (

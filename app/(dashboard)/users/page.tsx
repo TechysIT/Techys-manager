@@ -9,6 +9,7 @@ import {
   LockOpenIcon,
 } from "@heroicons/react/24/outline";
 import { LoadingTable } from "@/components/ui/LoadingSpinner";
+import { toast } from "sonner";
 
 interface User {
   id: string;
@@ -94,11 +95,11 @@ export default function UsersPage() {
         resetForm();
       } else {
         const data = await res.json();
-        alert(data.error || "Failed to create user");
+        toast.error(data.message || "Failed to create user");
       }
     } catch (error) {
       console.error("Error creating user:", error);
-      alert("Failed to create user");
+      toast.error("Failed to create user");
     } finally {
       setLoading(false);
     }
@@ -138,20 +139,43 @@ export default function UsersPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this user?")) return;
+  const handleDelete = (id: string) => {
+    const user = users.find((u) => u.id === id);
+    if (!user) return;
 
-    try {
-      const res = await fetch(`/api/users/${id}`, {
-        method: "DELETE",
-      });
+    toast.warning("Delete User?", {
+      description: `Are you sure you want to delete "${user.name}"?`,
+      duration: 10000, // 10 seconds
+      action: {
+        label: "Delete",
+        onClick: async () => {
+          try {
+            const res = await fetch(`/api/users/${id}`, { method: "DELETE" });
+            const data = await res.json();
 
-      if (res.ok) {
-        await fetchUsers();
-      }
-    } catch (error) {
-      console.error("Error deleting user:", error);
-    }
+            if (res.ok) {
+              toast.success("Deleted!", {
+                description: `User "${user.name}" deleted successfully`,
+              });
+              await fetchUsers();
+            } else {
+              toast.error("Error", {
+                description: data.error || "Failed to delete user",
+              });
+            }
+          } catch (error) {
+            console.error("Error deleting user:", error);
+            toast.error("Network Error", {
+              description: "Failed to delete user",
+            });
+          }
+        },
+      },
+      cancel: {
+        label: "Cancel",
+        onClick: () => {}, // optional
+      },
+    });
   };
 
   const handleSuspend = async (id: string, suspend: boolean) => {

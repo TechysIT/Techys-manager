@@ -13,6 +13,7 @@ import {
   LinkIcon,
 } from "@heroicons/react/24/outline";
 import { LoadingPage } from "@/components/ui/LoadingSpinner";
+import { toast } from "sonner";
 
 interface Project {
   id: string;
@@ -114,11 +115,11 @@ export default function ProjectDetailsPage() {
         resetForm();
       } else {
         const data = await res.json();
-        alert(data.error || "Failed to create material");
+        toast.error(data.error || "Failed to create material");
       }
     } catch (error) {
       console.error("Error creating material:", error);
-      alert("Failed to create material");
+      toast.error("Failed to create material");
     } finally {
       setLoading(false);
     }
@@ -145,37 +146,56 @@ export default function ProjectDetailsPage() {
         resetForm();
       } else {
         const data = await res.json();
-        alert(data.error || "Failed to update material");
+        toast.error(data.error || "Failed to update material");
       }
     } catch (error) {
       console.error("Error updating material:", error);
-      alert("Failed to update material");
+      toast.error("Failed to update material");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDelete = async (materialId: string) => {
-    if (!confirm("Are you sure you want to delete this material?")) return;
+  const handleDelete = (materialId: string) => {
+    const material = materials.find((m) => m.id === materialId);
+    if (!material) return;
 
-    try {
-      const res = await fetch(
-        `/api/projects/${projectId}/materials/${materialId}`,
-        {
-          method: "DELETE",
+    toast.warning("Delete Material?", {
+      description: `Are you sure you want to delete "${material.title}"?`,
+      duration: 10000, // 10 seconds
+      action: {
+        label: "Delete",
+        onClick: async () => {
+          try {
+            const res = await fetch(
+              `/api/projects/${projectId}/materials/${materialId}`,
+              { method: "DELETE" },
+            );
+            const data = await res.json();
+
+            if (res.ok) {
+              toast.success("Deleted!", {
+                description: `Material "${material.title}" deleted successfully`,
+              });
+              await fetchMaterials();
+            } else {
+              toast.error("Error", {
+                description: data.error || "Failed to delete material",
+              });
+            }
+          } catch (error) {
+            console.error("Error deleting material:", error);
+            toast.error("Network Error", {
+              description: "Failed to delete material",
+            });
+          }
         },
-      );
-
-      if (res.ok) {
-        await fetchMaterials();
-      } else {
-        const data = await res.json();
-        alert(data.error || "Failed to delete material");
-      }
-    } catch (error) {
-      console.error("Error deleting material:", error);
-      alert("Failed to delete material");
-    }
+      },
+      cancel: {
+        label: "Cancel",
+        onClick: () => {},
+      },
+    });
   };
 
   const openCreateModal = () => {

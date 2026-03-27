@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { PlusIcon, PencilIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { LoadingTable } from "@/components/ui/LoadingSpinner";
+import { toast } from "sonner";
 
 interface Section {
   id: string;
@@ -119,21 +120,45 @@ export default function SectionsPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure? This will delete all tasks in this section."))
-      return;
+  const handleDelete = (id: string) => {
+    const section = sections.find((s) => s.id === id);
+    if (!section) return;
 
-    try {
-      const res = await fetch(`/api/sections/${id}`, {
-        method: "DELETE",
-      });
+    toast.warning("Delete Section?", {
+      description: `Are you sure you want to delete "${section.name}"? This will delete all tasks in this section.`,
+      duration: 10000, // 10 seconds
+      action: {
+        label: "Delete",
+        onClick: async () => {
+          try {
+            const res = await fetch(`/api/sections/${id}`, {
+              method: "DELETE",
+            });
+            const data = await res.json();
 
-      if (res.ok) {
-        await fetchSections();
-      }
-    } catch (error) {
-      console.error("Error deleting section:", error);
-    }
+            if (res.ok) {
+              toast.success("Deleted!", {
+                description: `Section "${section.name}" deleted successfully`,
+              });
+              await fetchSections();
+            } else {
+              toast.error("Error", {
+                description: data.error || "Failed to delete section",
+              });
+            }
+          } catch (error) {
+            console.error("Error deleting section:", error);
+            toast.error("Network Error", {
+              description: "Failed to delete section",
+            });
+          }
+        },
+      },
+      cancel: {
+        label: "Cancel",
+        onClick: () => {}, // optional
+      },
+    });
   };
 
   const openCreateModal = () => {

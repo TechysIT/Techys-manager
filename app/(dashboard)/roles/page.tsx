@@ -8,6 +8,7 @@ import {
   ShieldCheckIcon,
 } from "@heroicons/react/24/outline";
 import { LoadingCard } from "@/components/ui/LoadingSpinner";
+import { toast } from "sonner";
 
 interface Permission {
   id: string;
@@ -95,11 +96,11 @@ export default function RolesPage() {
         resetForm();
       } else {
         const data = await res.json();
-        alert(data.error || "Failed to create role");
+        toast.error(data.error || "Failed to create role");
       }
     } catch (error) {
       console.error("Error creating role:", error);
-      alert("Failed to create role");
+      toast.error("Failed to create role");
     } finally {
       setLoading(false);
     }
@@ -123,35 +124,59 @@ export default function RolesPage() {
         resetForm();
       } else {
         const data = await res.json();
-        alert(data.error || "Failed to update role");
+        toast.error(data.error || "Failed to update role");
       }
     } catch (error) {
       console.error("Error updating role:", error);
-      alert("Failed to update role");
+      toast.error("Failed to update role");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure? This will affect all users with this role."))
-      return;
+  const handleDelete = (id: string) => {
+    const role = roles.find((r) => r.id === id);
 
-    try {
-      const res = await fetch(`/api/roles/${id}`, {
-        method: "DELETE",
-      });
+    if (!role) return;
 
-      if (res.ok) {
-        await fetchRoles();
-      } else {
-        const data = await res.json();
-        alert(data.error || "Failed to delete role");
-      }
-    } catch (error) {
-      console.error("Error deleting role:", error);
-      alert("Failed to delete role");
-    }
+    toast.warning("Delete Role?", {
+      description: `Are you sure you want to delete "${role.name}"?`,
+      duration: 10000, // 10 seconds to click
+      action: {
+        label: "Delete",
+        onClick: async () => {
+          try {
+            const res = await fetch(`/api/roles/${id}`, { method: "DELETE" });
+            const data = await res.json();
+
+            if (res.ok) {
+              toast.success("Deleted!", {
+                description: `Role "${role.name}" deleted successfully`,
+              });
+              await fetchRoles();
+            } else if (res.status === 403) {
+              toast.error("Permission Denied", {
+                description:
+                  data.error || "You don't have permission to delete this role",
+              });
+            } else {
+              toast.error("Error", {
+                description: data.error || "Failed to delete role",
+              });
+            }
+          } catch (error) {
+            console.error("Error deleting role:", error);
+            toast.error("Network Error", {
+              description: "Failed to delete role",
+            });
+          }
+        },
+      },
+      cancel: {
+        label: "Cancel",
+        onClick: () => {}, 
+      },
+    });
   };
 
   const openCreateModal = () => {
