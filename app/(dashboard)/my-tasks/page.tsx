@@ -304,7 +304,13 @@ export default function MyTasksPage() {
               <div className="p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    <h3
+                      className={`text-lg font-semibold mb-2 ${
+                        task.status === "DONE"
+                          ? "text-gray-400 line-through"
+                          : "text-gray-900"
+                      }`}
+                    >
                       {task.title}
                     </h3>
                     <p className="text-sm text-gray-600 mb-3">
