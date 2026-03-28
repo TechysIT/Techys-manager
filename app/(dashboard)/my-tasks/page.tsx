@@ -380,24 +380,26 @@ export default function MyTasksPage() {
                       task.comments.map((comment) => (
                         <div
                           key={comment.id}
-                          className="bg-white rounded-lg p-4 shadow-sm"
+                          className="bg-white rounded-xl p-3 shadow-sm border border-gray-100"
                         >
                           <div className="flex items-start gap-3">
                             <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
-                              <span className="text-primary-600 font-medium text-sm">
+                              <span className="text-primary-600 font-medium text-xs">
                                 {comment.user.name.charAt(0).toUpperCase()}
                               </span>
                             </div>
+
                             <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="font-medium text-gray-900">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-medium text-sm text-gray-900">
                                   {comment.user.name}
                                 </span>
-                                <span className="text-xs text-gray-500">
+                                <span className="text-[11px] text-gray-400">
                                   {new Date(comment.createdAt).toLocaleString()}
                                 </span>
                               </div>
-                              <p className="text-gray-700 whitespace-pre-wrap">
+
+                              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
                                 {comment.content}
                               </p>
                             </div>

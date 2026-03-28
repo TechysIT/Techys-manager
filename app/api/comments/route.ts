@@ -89,7 +89,7 @@ export async function GET(request: NextRequest) {
         },
       },
       orderBy: {
-        createdAt: "desc",
+        createdAt: "asc",
       },
     });
 
@@ -200,7 +200,7 @@ export async function POST(request: NextRequest) {
     // Create notifications for mentioned users
     if (mentionedUserIds.length > 0) {
       const notificationsToCreate = mentionedUserIds
-        .filter((userId) => userId !== session.user.id) 
+        .filter((userId) => userId !== session.user.id)
         .map((userId) => ({
           userId,
           type: "mention",
