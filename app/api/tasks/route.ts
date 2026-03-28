@@ -214,8 +214,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Section not found" }, { status: 404 });
     }
 
-    // Verify all assigned users exist if provided
     if (assignedUserIds && assignedUserIds.length > 0) {
+      // Only allow ONE user assignment
+      if (assignedUserIds.length > 1) {
+        return NextResponse.json(
+          { error: "A task can only be assigned to one user at a time" },
+          { status: 400 },
+        );
+      }
+
       const allUsers = await prisma.user.findMany({
         where: {
           id: { in: assignedUserIds },
@@ -227,12 +234,11 @@ export async function POST(request: NextRequest) {
 
       if (activeUsers.length !== assignedUserIds.length) {
         return NextResponse.json(
-          { error: "One or more assigned users not found or are suspended" },
+          { error: "User not found or is suspended" },
           { status: 400 },
         );
       }
     }
-
     // Create task with assignments
     const task = await prisma.task.create({
       data: {

@@ -10,9 +10,9 @@ import {
   CheckCircleIcon,
   ChartBarIcon,
   ArrowRightOnRectangleIcon,
-  RectangleStackIcon,
   UserGroupIcon,
   ShieldCheckIcon,
+  UserIcon,
 } from "@heroicons/react/24/outline";
 
 interface NavItem {
@@ -21,14 +21,15 @@ interface NavItem {
   icon: React.ComponentType<{ className?: string }>;
 }
 
+// In your navigation component
 const navigation: NavItem[] = [
   { name: "Dashboard", href: "/dashboard", icon: HomeIcon },
   { name: "Projects", href: "/projects", icon: FolderIcon },
-  { name: "Sections", href: "/sections", icon: RectangleStackIcon },
-  { name: "Tasks", href: "/tasks", icon: CheckCircleIcon },
-  { name: "Reports", href: "/reports", icon: ChartBarIcon },
-  { name: "Users", href: "/users", icon: UserGroupIcon },
+  { name: "My Tasks", href: "/my-tasks", icon: CheckCircleIcon },
+  { name: "Assign Tasks", href: "/assign-tasks", icon: UserGroupIcon },
+  { name: "Users", href: "/users", icon: UserIcon },
   { name: "Roles", href: "/roles", icon: ShieldCheckIcon },
+  { name: "Reports", href: "/reports", icon: ChartBarIcon },
 ];
 
 export function Sidebar() {

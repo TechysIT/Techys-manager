@@ -290,60 +290,52 @@ export default function ProjectsPage() {
           {projects.map((project) => (
             <div
               key={project.id}
-              className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow"
+              className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow flex flex-col justify-between"
             >
-              <div className="flex justify-between items-start mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">
-                  {project.name}
-                </h3>
-                <div className="flex gap-2">
-                  <Link
-                    href={`/projects/${project.id}`}
-                    className="text-blue-600 hover:text-blue-800"
-                    title="View Details"
-                  >
-                    <svg
-                      className="w-5 h-5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
+              {/* Top Section */}
+              <div>
+                <div className="flex justify-between items-start mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    {project.name}
+                  </h3>
+
+                  <div className="flex gap-5">
+                    <button
+                      onClick={() => openEditModal(project)}
+                      className="text-orange-600 hover:text-orange-800"
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                      />
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                      />
-                    </svg>
-                  </Link>
-                  <button
-                    onClick={() => openEditModal(project)}
-                    className="text-blue-600 hover:text-blue-800"
-                  >
-                    <PencilIcon className="w-5 h-5" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(project.id)}
-                    className="text-red-600 hover:text-red-800"
-                  >
-                    <TrashIcon className="w-5 h-5" />
-                  </button>
+                      <PencilIcon className="w-5 h-5" />
+                    </button>
+
+                    <button
+                      onClick={() => handleDelete(project.id)}
+                      className="text-red-600 hover:text-red-800"
+                    >
+                      <TrashIcon className="w-5 h-5" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-              <p className="text-gray-600 text-sm mb-4">
-                {project.description || "No description"}
-              </p>
-              {project.deadline && (
-                <p className="text-sm text-gray-500">
-                  Deadline: {new Date(project.deadline).toLocaleDateString()}
+
+                <p className="text-gray-600 text-sm mb-4">
+                  {project.description || "No description"}
                 </p>
-              )}
+
+                {project.deadline && (
+                  <p className="text-sm text-gray-500">
+                    Deadline: {new Date(project.deadline).toLocaleDateString()}
+                  </p>
+                )}
+              </div>
+
+              {/* Bottom Section */}
+              <div className="flex justify-end mt-4">
+                <Link
+                  href={`/projects/${project.id}`}
+                  className="text-orange-600 hover:text-orange-800"
+                >
+                  View details →
+                </Link>
+              </div>
             </div>
           ))}
         </div>

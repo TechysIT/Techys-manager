@@ -4,10 +4,28 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkPermission } from "@/lib/permissions";
 
+// Helper function to extract mentions
+function extractMentions(content: string, users: any[]): string[] {
+  const mentionPattern = /@(\w+(?:\s+\w+)*)/g;
+  const mentions: string[] = [];
+  let match;
+
+  while ((match = mentionPattern.exec(content)) !== null) {
+    const mentionedName = match[1];
+    const user = users.find(
+      (u) => u.name.toLowerCase() === mentionedName.toLowerCase(),
+    );
+    if (user) {
+      mentions.push(user.id);
+    }
+  }
+
+  return mentions;
+}
+
 /**
  * GET /api/comments?taskId=xxx
  * List all comments for a task
- * Permission: comment:read OR user is assigned to the task
  */
 export async function GET(request: NextRequest) {
   try {
@@ -46,7 +64,7 @@ export async function GET(request: NextRequest) {
     // Check permission: either has comment:read OR is assigned to the task
     const hasReadPermission = checkPermission(session, "comment", "read");
     const isAssignedToTask = task.assignments.some(
-      (assignment: { userId: string }) => assignment.userId === session.user.id,
+      (assignment) => assignment.userId === session.user.id,
     );
 
     if (!hasReadPermission && !isAssignedToTask) {
@@ -87,8 +105,7 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/comments
- * Create a new comment on a task
- * Permission: comment:create OR user is assigned to the task
+ * Create a new comment on a task with mention notifications
  */
 export async function POST(request: NextRequest) {
   try {
@@ -98,11 +115,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Parse request body
     const body = await request.json();
     const { content, taskId } = body;
 
-    // Validate required fields
     if (!content || content.trim() === "") {
       return NextResponse.json(
         { error: "Comment content is required" },
@@ -133,10 +148,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
     }
 
-    // Check permission: either has comment:create OR is assigned to the task
+    // Check permission
     const hasCreatePermission = checkPermission(session, "comment", "create");
     const isAssignedToTask = task.assignments.some(
-      (assignment: { userId: string }) => assignment.userId === session.user.id,
+      (assignment) => assignment.userId === session.user.id,
     );
 
     if (!hasCreatePermission && !isAssignedToTask) {
@@ -172,10 +187,46 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Extract mentions and create notifications
+    const allUsers = await prisma.user.findMany({
+      select: {
+        id: true,
+        name: true,
+      },
+    });
+
+    const mentionedUserIds = extractMentions(content, allUsers);
+
+    // Create notifications for mentioned users
+    if (mentionedUserIds.length > 0) {
+      const notificationsToCreate = mentionedUserIds
+        .filter((userId) => userId !== session.user.id) 
+        .map((userId) => ({
+          userId,
+          type: "mention",
+          title: "You were mentioned in a comment",
+          message: `${session.user.name} mentioned you in a comment on "${task.title}"`,
+          link: `/my-tasks`,
+        }));
+
+      if (notificationsToCreate.length > 0) {
+        await prisma.notification.createMany({
+          data: notificationsToCreate,
+        });
+
+        console.log(
+          `Created ${notificationsToCreate.length} notifications for mentions`,
+        );
+      }
+    }
+
     return NextResponse.json(
       {
         message: "Comment created successfully",
         comment,
+        mentionsNotified: mentionedUserIds.filter(
+          (id) => id !== session.user.id,
+        ).length,
       },
       { status: 201 },
     );

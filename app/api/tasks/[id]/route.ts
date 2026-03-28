@@ -203,8 +203,15 @@ export async function PATCH(
       );
     }
 
-    // Verify all assigned users exist if provided (only admins can reassign)
     if (assignedUserIds && assignedUserIds.length > 0) {
+      // Only allow ONE user assignment
+      if (assignedUserIds.length > 1) {
+        return NextResponse.json(
+          { error: "A task can only be assigned to one user at a time" },
+          { status: 400 },
+        );
+      }
+
       const allUsers = await prisma.user.findMany({
         where: {
           id: { in: assignedUserIds },
@@ -216,7 +223,7 @@ export async function PATCH(
 
       if (activeUsers.length !== assignedUserIds.length) {
         return NextResponse.json(
-          { error: "One or more assigned users not found or are suspended" },
+          { error: "User not found or is suspended" },
           { status: 400 },
         );
       }
@@ -239,7 +246,7 @@ export async function PATCH(
         ...(hasUpdatePermission &&
           assignedUserIds && {
             assignments: {
-              deleteMany: {},
+              deleteMany: {}, // Delete ALL existing assignments
               create: assignedUserIds.map((userId: string) => ({
                 userId,
               })),

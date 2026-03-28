@@ -2,6 +2,7 @@
 "use client";
 
 import { Sidebar } from "@/components/layout/Sidebar";
+import NotificationBell from "@/components/ui/NotificationBell";
 import { SessionProvider } from "next-auth/react";
 
 export default function DashboardLayout({
@@ -17,8 +18,15 @@ export default function DashboardLayout({
           <Sidebar />
         </div>
 
-        {/* Main content */}
-        <div className="flex-1 overflow-auto p-6">{children}</div>
+        <div className="flex-1 overflow-auto p-6">
+          {/* Top bar */}
+          <div className="flex justify-end mb-2">
+            <NotificationBell />
+          </div>
+
+          {/* Page content */}
+          <div>{children}</div>
+        </div>
       </div>
     </SessionProvider>
   );

@@ -8,28 +8,24 @@ import {
   TrashIcon,
   ArrowLeftIcon,
   DocumentTextIcon,
-  CodeBracketIcon,
-  BeakerIcon,
-  LinkIcon,
+  CubeIcon,
 } from "@heroicons/react/24/outline";
-import { LoadingPage } from "@/components/ui/LoadingSpinner";
 import { toast } from "sonner";
+import Link from "next/link";
 
-interface Project {
+interface Section {
   id: string;
   name: string;
   description: string;
-  deadline: string;
-  createdAt: string;
-  _count?: {
-    sections: number;
-    materials: number;
+  deadline: string | null;
+  _count: {
+    tasks: number;
   };
 }
 
 interface Material {
   id: string;
-  type: "DOCUMENTATION" | "ENVIRONMENT_VAR" | "TEST_RESULT" | "LINK";
+  type: string;
   title: string;
   content: string;
   url: string;
@@ -38,24 +34,39 @@ interface Material {
   createdAt: string;
 }
 
-export default function ProjectDetailsPage() {
+interface Project {
+  id: string;
+  name: string;
+  description: string;
+  deadline: string | null;
+}
+
+export default function ProjectDetailPage() {
   const params = useParams();
   const router = useRouter();
   const projectId = params.id as string;
 
+  const [activeTab, setActiveTab] = useState<"sections" | "materials">(
+    "sections",
+  );
   const [project, setProject] = useState<Project | null>(null);
+  const [sections, setSections] = useState<Section[]>([]);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [showModal, setShowModal] = useState(false);
+  const [modalType, setModalType] = useState<"section" | "material">("section");
+  const [editingSection, setEditingSection] = useState<Section | null>(null);
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
 
-  const [formData, setFormData] = useState({
-    type: "DOCUMENTATION" as
-      | "DOCUMENTATION"
-      | "ENVIRONMENT_VAR"
-      | "TEST_RESULT"
-      | "LINK",
+  const [sectionFormData, setSectionFormData] = useState({
+    name: "",
+    description: "",
+    deadline: "",
+  });
+
+  const [materialFormData, setMaterialFormData] = useState({
+    type: "DOCUMENTATION",
     title: "",
     content: "",
     url: "",
@@ -64,27 +75,44 @@ export default function ProjectDetailsPage() {
   });
 
   useEffect(() => {
-    if (projectId) {
-      fetchData();
-    }
+    fetchProject();
+    fetchSections();
+    fetchMaterials();
   }, [projectId]);
-
-  const fetchData = async () => {
-    setFetching(true);
-    try {
-      await Promise.all([fetchProject(), fetchMaterials()]);
-    } finally {
-      setFetching(false);
-    }
-  };
 
   const fetchProject = async () => {
     try {
       const res = await fetch(`/api/projects/${projectId}`);
       const data = await res.json();
-      setProject(data.project);
+
+      if (res.ok) {
+        setProject(data.project);
+      } else {
+        toast.error("Error", { description: data.error });
+        router.push("/projects");
+      }
     } catch (error) {
       console.error("Error fetching project:", error);
+      toast.error("Network Error", { description: "Failed to fetch project" });
+    }
+  };
+
+  const fetchSections = async () => {
+    setFetching(true);
+    try {
+      const res = await fetch(`/api/sections?projectId=${projectId}`);
+      const data = await res.json();
+
+      if (res.ok) {
+        setSections(data.sections || []);
+      } else {
+        toast.error("Error", { description: data.error });
+      }
+    } catch (error) {
+      console.error("Error fetching sections:", error);
+      toast.error("Network Error", { description: "Failed to fetch sections" });
+    } finally {
+      setFetching(false);
     }
   };
 
@@ -92,13 +120,122 @@ export default function ProjectDetailsPage() {
     try {
       const res = await fetch(`/api/projects/${projectId}/materials`);
       const data = await res.json();
-      setMaterials(data.materials || []);
+
+      if (res.ok) {
+        setMaterials(data.materials || []);
+      } else {
+        toast.error("Error", { description: data.error });
+      }
     } catch (error) {
       console.error("Error fetching materials:", error);
+      toast.error("Network Error", {
+        description: "Failed to fetch materials",
+      });
     }
   };
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleCreateSection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/sections", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...sectionFormData,
+          projectId,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        toast.success("Success!", {
+          description: `Section "${sectionFormData.name}" created successfully`,
+        });
+        await fetchSections();
+        setShowModal(false);
+        resetSectionForm();
+      } else {
+        toast.error("Error", { description: data.error });
+      }
+    } catch (error) {
+      console.error("Error creating section:", error);
+      toast.error("Network Error", { description: "Failed to create section" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateSection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingSection) return;
+    setLoading(true);
+
+    try {
+      const res = await fetch(`/api/sections/${editingSection.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(sectionFormData),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        toast.success("Success!", {
+          description: `Section "${sectionFormData.name}" updated successfully`,
+        });
+        await fetchSections();
+        setShowModal(false);
+        resetSectionForm();
+      } else {
+        toast.error("Error", { description: data.error });
+      }
+    } catch (error) {
+      console.error("Error updating section:", error);
+      toast.error("Network Error", { description: "Failed to update section" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteSection = async (id: string) => {
+    const section = sections.find((s) => s.id === id);
+
+    toast.warning("Delete Section?", {
+      description: `Are you sure you want to delete "${section?.name}"? This will also delete all tasks in this section.`,
+      duration: 10000,
+      action: {
+        label: "Delete",
+        onClick: async () => {
+          try {
+            const res = await fetch(`/api/sections/${id}`, {
+              method: "DELETE",
+            });
+
+            if (res.ok) {
+              toast.success("Deleted!", {
+                description: `Section "${section?.name}" deleted successfully`,
+              });
+              await fetchSections();
+            } else {
+              const data = await res.json();
+              toast.error("Error", { description: data.error });
+            }
+          } catch (error) {
+            console.error("Error deleting section:", error);
+            toast.error("Network Error", {
+              description: "Failed to delete section",
+            });
+          }
+        },
+      },
+      cancel: { label: "Cancel", onClick: () => {} },
+    });
+  };
+
+  const handleCreateMaterial = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
@@ -106,26 +243,32 @@ export default function ProjectDetailsPage() {
       const res = await fetch(`/api/projects/${projectId}/materials`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(materialFormData),
       });
 
+      const data = await res.json();
+
       if (res.ok) {
+        toast.success("Success!", {
+          description: `Material "${materialFormData.title}" created successfully`,
+        });
         await fetchMaterials();
         setShowModal(false);
-        resetForm();
+        resetMaterialForm();
       } else {
-        const data = await res.json();
-        toast.error(data.error || "Failed to create material");
+        toast.error("Error", { description: data.error });
       }
     } catch (error) {
       console.error("Error creating material:", error);
-      toast.error("Failed to create material");
+      toast.error("Network Error", {
+        description: "Failed to create material",
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleUpdate = async (e: React.FormEvent) => {
+  const handleUpdateMaterial = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingMaterial) return;
     setLoading(true);
@@ -136,52 +279,57 @@ export default function ProjectDetailsPage() {
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formData),
+          body: JSON.stringify(materialFormData),
         },
       );
 
+      const data = await res.json();
+
       if (res.ok) {
+        toast.success("Success!", {
+          description: `Material "${materialFormData.title}" updated successfully`,
+        });
         await fetchMaterials();
         setShowModal(false);
-        resetForm();
+        resetMaterialForm();
       } else {
-        const data = await res.json();
-        toast.error(data.error || "Failed to update material");
+        toast.error("Error", { description: data.error });
       }
     } catch (error) {
       console.error("Error updating material:", error);
-      toast.error("Failed to update material");
+      toast.error("Network Error", {
+        description: "Failed to update material",
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDelete = (materialId: string) => {
-    const material = materials.find((m) => m.id === materialId);
-    if (!material) return;
+  const handleDeleteMaterial = async (id: string) => {
+    const material = materials.find((m) => m.id === id);
 
     toast.warning("Delete Material?", {
-      description: `Are you sure you want to delete "${material.title}"?`,
-      duration: 10000, // 10 seconds
+      description: `Are you sure you want to delete "${material?.title}"?`,
+      duration: 10000,
       action: {
         label: "Delete",
         onClick: async () => {
           try {
             const res = await fetch(
-              `/api/projects/${projectId}/materials/${materialId}`,
-              { method: "DELETE" },
+              `/api/projects/${projectId}/materials/${id}`,
+              {
+                method: "DELETE",
+              },
             );
-            const data = await res.json();
 
             if (res.ok) {
               toast.success("Deleted!", {
-                description: `Material "${material.title}" deleted successfully`,
+                description: `Material "${material?.title}" deleted successfully`,
               });
               await fetchMaterials();
             } else {
-              toast.error("Error", {
-                description: data.error || "Failed to delete material",
-              });
+              const data = await res.json();
+              toast.error("Error", { description: data.error });
             }
           } catch (error) {
             console.error("Error deleting material:", error);
@@ -191,22 +339,38 @@ export default function ProjectDetailsPage() {
           }
         },
       },
-      cancel: {
-        label: "Cancel",
-        onClick: () => {},
-      },
+      cancel: { label: "Cancel", onClick: () => {} },
     });
   };
 
-  const openCreateModal = () => {
-    resetForm();
-    setEditingMaterial(null);
+  const openCreateSectionModal = () => {
+    resetSectionForm();
+    setEditingSection(null);
+    setModalType("section");
     setShowModal(true);
   };
 
-  const openEditModal = (material: Material) => {
+  const openEditSectionModal = (section: Section) => {
+    setEditingSection(section);
+    setSectionFormData({
+      name: section.name,
+      description: section.description || "",
+      deadline: section.deadline ? section.deadline.split("T")[0] : "",
+    });
+    setModalType("section");
+    setShowModal(true);
+  };
+
+  const openCreateMaterialModal = () => {
+    resetMaterialForm();
+    setEditingMaterial(null);
+    setModalType("material");
+    setShowModal(true);
+  };
+
+  const openEditMaterialModal = (material: Material) => {
     setEditingMaterial(material);
-    setFormData({
+    setMaterialFormData({
       type: material.type,
       title: material.title,
       content: material.content || "",
@@ -214,11 +378,17 @@ export default function ProjectDetailsPage() {
       category: material.category || "",
       isPublic: material.isPublic,
     });
+    setModalType("material");
     setShowModal(true);
   };
 
-  const resetForm = () => {
-    setFormData({
+  const resetSectionForm = () => {
+    setSectionFormData({ name: "", description: "", deadline: "" });
+    setEditingSection(null);
+  };
+
+  const resetMaterialForm = () => {
+    setMaterialFormData({
       type: "DOCUMENTATION",
       title: "",
       content: "",
@@ -229,246 +399,375 @@ export default function ProjectDetailsPage() {
     setEditingMaterial(null);
   };
 
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case "DOCUMENTATION":
-        return <DocumentTextIcon className="w-5 h-5" />;
-      case "ENVIRONMENT_VAR":
-        return <CodeBracketIcon className="w-5 h-5" />;
-      case "TEST_RESULT":
-        return <BeakerIcon className="w-5 h-5" />;
-      case "LINK":
-        return <LinkIcon className="w-5 h-5" />;
-      default:
-        return <DocumentTextIcon className="w-5 h-5" />;
-    }
-  };
-
-  const getTypeBadgeColor = (type: string) => {
-    switch (type) {
-      case "DOCUMENTATION":
-        return "bg-blue-100 text-blue-800";
-      case "ENVIRONMENT_VAR":
-        return "bg-green-100 text-green-800";
-      case "TEST_RESULT":
-        return "bg-purple-100 text-purple-800";
-      case "LINK":
-        return "bg-orange-100 text-orange-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
-
-  const formatType = (type: string) => {
-    return type.replace(/_/g, " ");
-  };
-
-  if (fetching) {
-    return <LoadingPage />;
-  }
-
-  if (!project) {
+  if (fetching || !project) {
     return (
-      <div className="text-center py-12">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">
-          Project not found
-        </h2>
-        <p className="text-gray-600 mb-4">
-          The project you&apos;re looking for doesn&apos;t exist.
-        </p>
-        <button
-          onClick={() => router.push("/projects")}
-          className="text-primary-600 hover:text-primary-700"
-        >
-          ← Back to Projects
-        </button>
+      <div>
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-1/3 mb-4"></div>
+          <div className="h-4 bg-gray-200 rounded w-2/3 mb-8"></div>
+        </div>
       </div>
     );
   }
 
   return (
     <div>
+      {/* Back Button and Project Header */}
       <div className="mb-6">
-        <button
-          onClick={() => router.push("/projects")}
-          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4"
+        <Link
+          href="/projects"
+          className="inline-flex items-center gap-2 text-primary-600 hover:text-primary-800 mb-4"
         >
-          <ArrowLeftIcon className="w-5 h-5" />
+          <ArrowLeftIcon className="w-4 h-4" />
           Back to Projects
-        </button>
-
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">{project.name}</h1>
-            <p className="text-gray-600 mt-2">{project.description}</p>
-            <div className="flex gap-4 mt-4 text-sm text-gray-500">
-              <span>Sections: {project._count?.sections || 0}</span>
-              <span>Materials: {project._count?.materials || 0}</span>
-              {project.deadline && (
-                <span>
-                  Deadline: {new Date(project.deadline).toLocaleDateString()}
-                </span>
-              )}
-            </div>
-          </div>
-          <button
-            onClick={openCreateModal}
-            className="flex items-center gap-2 bg-primary-500 text-white px-4 py-2 rounded-lg hover:bg-primary-600"
-          >
-            <PlusIcon className="w-5 h-5" />
-            Add Material
-          </button>
+        </Link>
+        <div className="bg-white rounded-lg shadow p-6">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">
+            {project.name}
+          </h1>
+          {project.description && (
+            <p className="text-gray-600 mb-3">{project.description}</p>
+          )}
+          {project.deadline && (
+            <p className="text-sm text-gray-500">
+              Deadline: {new Date(project.deadline).toLocaleDateString()}
+            </p>
+          )}
         </div>
       </div>
 
-      {materials.length === 0 ? (
-        <div className="bg-white rounded-lg shadow p-8 text-center">
-          <DocumentTextIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">
-            No materials yet
-          </h3>
-          <p className="text-gray-600 mb-4">
-            Add documentation, environment variables, test results, or links to
-            this project.
-          </p>
+      {/* Tabs */}
+      <div className="border-b border-gray-200 mb-6">
+        <nav className="-mb-px flex gap-6">
           <button
-            onClick={openCreateModal}
-            className="inline-flex items-center gap-2 bg-primary-500 text-white px-4 py-2 rounded-lg hover:bg-primary-600"
+            onClick={() => setActiveTab("sections")}
+            className={`pb-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === "sections"
+                ? "border-primary-500 text-primary-600"
+                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+            }`}
           >
-            <PlusIcon className="w-5 h-5" />
-            Add First Material
-          </button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {materials.map((material) => (
-            <div
-              key={material.id}
-              className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="text-gray-600">
-                    {getTypeIcon(material.type)}
-                  </div>
-                  <span
-                    className={`text-xs px-2 py-1 rounded-full ${getTypeBadgeColor(material.type)}`}
-                  >
-                    {formatType(material.type)}
-                  </span>
-                </div>
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => openEditModal(material)}
-                    className="text-blue-600 hover:text-blue-800"
-                    title="Edit"
-                  >
-                    <PencilIcon className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(material.id)}
-                    className="text-red-600 hover:text-red-800"
-                    title="Delete"
-                  >
-                    <TrashIcon className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              <h3 className="font-semibold text-gray-900 mb-2">
-                {material.title}
-              </h3>
-
-              {material.content && (
-                <p className="text-sm text-gray-600 mb-3 line-clamp-3">
-                  {material.content}
-                </p>
-              )}
-
-              {material.url && (
-                <a
-                  href={material.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm text-primary-600 hover:text-primary-700 break-all block"
-                >
-                  {material.url}
-                </a>
-              )}
-
-              <div className="flex items-center justify-between mt-4 pt-4 border-t">
-                <span className="text-xs text-gray-500">
-                  {material.category || "Uncategorized"}
-                </span>
-                {material.isPublic && (
-                  <span className="text-xs px-2 py-1 bg-green-100 text-green-800 rounded">
-                    Public
-                  </span>
-                )}
-              </div>
+            <div className="flex items-center gap-2">
+              <CubeIcon className="w-5 h-5" />
+              Sections ({sections.length})
             </div>
-          ))}
+          </button>
+          <button
+            onClick={() => setActiveTab("materials")}
+            className={`pb-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === "materials"
+                ? "border-primary-500 text-primary-600"
+                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <DocumentTextIcon className="w-5 h-5" />
+              Materials ({materials.length})
+            </div>
+          </button>
+        </nav>
+      </div>
+
+      {/* Sections Tab */}
+      {activeTab === "sections" && (
+        <>
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-xl font-bold text-gray-900">Sections</h2>
+            <button
+              onClick={openCreateSectionModal}
+              className="flex items-center gap-2 bg-primary-500 text-white px-4 py-2 rounded-lg hover:bg-primary-600"
+            >
+              <PlusIcon className="w-5 h-5" />
+              Create Section
+            </button>
+          </div>
+
+          {sections.length === 0 ? (
+            <div className="bg-white rounded-lg shadow p-8 text-center">
+              <CubeIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                No sections yet
+              </h3>
+              <p className="text-gray-600">
+                Create your first section to organize tasks.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {sections.map((section) => (
+                <div
+                  key={section.id}
+                  className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow"
+                >
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                        {section.name}
+                      </h3>
+                      <p className="text-gray-600 text-sm mb-3">
+                        {section.description || "No description"}
+                      </p>
+                      {section.deadline && (
+                        <p className="text-sm text-gray-500 mb-2">
+                          Deadline:{" "}
+                          {new Date(section.deadline).toLocaleDateString()}
+                        </p>
+                      )}
+                      <p className="text-sm text-gray-500">
+                        {section._count.tasks} task
+                        {section._count.tasks !== 1 ? "s" : ""}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => openEditSectionModal(section)}
+                        className="text-blue-600 hover:text-blue-800"
+                      >
+                        <PencilIcon className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteSection(section.id)}
+                        className="text-red-600 hover:text-red-800"
+                      >
+                        <TrashIcon className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                  <Link
+                    href={`/sections/${section.id}`}
+                    className="block w-full bg-primary-100 text-primary-700 text-center px-4 py-2 rounded-lg hover:bg-primary-200 transition-colors"
+                  >
+                    View Tasks →
+                  </Link>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Materials Tab */}
+      {activeTab === "materials" && (
+        <>
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-xl font-bold text-gray-900">Materials</h2>
+            <button
+              onClick={openCreateMaterialModal}
+              className="flex items-center gap-2 bg-primary-500 text-white px-4 py-2 rounded-lg hover:bg-primary-600"
+            >
+              <PlusIcon className="w-5 h-5" />
+              Add Material
+            </button>
+          </div>
+
+          {materials.length === 0 ? (
+            <div className="bg-white rounded-lg shadow p-8 text-center">
+              <DocumentTextIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                No materials yet
+              </h3>
+              <p className="text-gray-600">
+                Add documentation, environment variables, or other resources.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {materials.map((material) => (
+                <div
+                  key={material.id}
+                  className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow"
+                >
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800">
+                          {material.type}
+                        </span>
+                        {material.isPublic && (
+                          <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-800">
+                            Public
+                          </span>
+                        )}
+                        {material.category && (
+                          <span className="text-xs px-2 py-1 rounded-full bg-purple-100 text-purple-800">
+                            {material.category}
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                        {material.title}
+                      </h3>
+                      {material.content && (
+                        <p className="text-gray-600 text-sm mb-2 line-clamp-3">
+                          {material.content}
+                        </p>
+                      )}
+                      {material.url && (
+                        <a
+                          href={material.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-primary-600 hover:text-primary-800"
+                        >
+                          🔗 {material.url}
+                        </a>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => openEditMaterialModal(material)}
+                        className="text-blue-600 hover:text-blue-800"
+                      >
+                        <PencilIcon className="w-5 h-5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteMaterial(material.id)}
+                        className="text-red-600 hover:text-red-800"
+                      >
+                        <TrashIcon className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Section Modal */}
+      {showModal && modalType === "section" && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-8 max-w-md w-full">
+            <h2 className="text-2xl font-bold mb-6">
+              {editingSection ? "Edit Section" : "Create Section"}
+            </h2>
+            <form
+              onSubmit={
+                editingSection ? handleUpdateSection : handleCreateSection
+              }
+            >
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Section Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={sectionFormData.name}
+                  onChange={(e) =>
+                    setSectionFormData({
+                      ...sectionFormData,
+                      name: e.target.value,
+                    })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Description
+                </label>
+                <textarea
+                  value={sectionFormData.description}
+                  onChange={(e) =>
+                    setSectionFormData({
+                      ...sectionFormData,
+                      description: e.target.value,
+                    })
+                  }
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Deadline
+                </label>
+                <input
+                  type="date"
+                  value={sectionFormData.deadline}
+                  onChange={(e) =>
+                    setSectionFormData({
+                      ...sectionFormData,
+                      deadline: e.target.value,
+                    })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="flex-1 bg-primary-500 text-white px-4 py-2 rounded-md hover:bg-primary-600 disabled:opacity-50"
+                >
+                  {loading ? "Saving..." : editingSection ? "Update" : "Create"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
-      {showModal && (
+      {/* Material Modal */}
+      {showModal && modalType === "material" && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <h2 className="text-2xl font-bold mb-6">
               {editingMaterial ? "Edit Material" : "Add Material"}
             </h2>
-
-            <form onSubmit={editingMaterial ? handleUpdate : handleCreate}>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Type *
-                  </label>
-                  <select
-                    required
-                    value={formData.type}
-                    onChange={(e) =>
-                      setFormData({ ...formData, type: e.target.value as any })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  >
-                    <option value="DOCUMENTATION">Documentation</option>
-                    <option value="ENVIRONMENT_VAR">
-                      Environment Variable
-                    </option>
-                    <option value="TEST_RESULT">Test Result</option>
-                    <option value="LINK">Link</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Category
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.category}
-                    onChange={(e) =>
-                      setFormData({ ...formData, category: e.target.value })
-                    }
-                    placeholder="e.g., API, Setup, Deployment"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
-                </div>
+            <form
+              onSubmit={
+                editingMaterial ? handleUpdateMaterial : handleCreateMaterial
+              }
+            >
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Type
+                </label>
+                <select
+                  value={materialFormData.type}
+                  onChange={(e) =>
+                    setMaterialFormData({
+                      ...materialFormData,
+                      type: e.target.value,
+                    })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="DOCUMENTATION">Documentation</option>
+                  <option value="ENVIRONMENT_VAR">Environment Variable</option>
+                  <option value="TEST_RESULT">Test Result</option>
+                  <option value="LINK">Link</option>
+                  <option value="NOTE">Note</option>
+                </select>
               </div>
 
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Title *
+                  Title
                 </label>
                 <input
                   type="text"
                   required
-                  value={formData.title}
+                  value={materialFormData.title}
                   onChange={(e) =>
-                    setFormData({ ...formData, title: e.target.value })
+                    setMaterialFormData({
+                      ...materialFormData,
+                      title: e.target.value,
+                    })
                   }
-                  placeholder="e.g., API Documentation, Database URL"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                 />
               </div>
@@ -478,13 +777,16 @@ export default function ProjectDetailsPage() {
                   Content
                 </label>
                 <textarea
-                  value={formData.content}
+                  value={materialFormData.content}
                   onChange={(e) =>
-                    setFormData({ ...formData, content: e.target.value })
+                    setMaterialFormData({
+                      ...materialFormData,
+                      content: e.target.value,
+                    })
                   }
-                  rows={6}
-                  placeholder="Enter content, code, or notes..."
+                  rows={5}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-sm"
+                  placeholder="Content, code, or description..."
                 />
               </div>
 
@@ -494,12 +796,33 @@ export default function ProjectDetailsPage() {
                 </label>
                 <input
                   type="url"
-                  value={formData.url}
+                  value={materialFormData.url}
                   onChange={(e) =>
-                    setFormData({ ...formData, url: e.target.value })
+                    setMaterialFormData({
+                      ...materialFormData,
+                      url: e.target.value,
+                    })
                   }
-                  placeholder="https://example.com"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="https://..."
+                />
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Category
+                </label>
+                <input
+                  type="text"
+                  value={materialFormData.category}
+                  onChange={(e) =>
+                    setMaterialFormData({
+                      ...materialFormData,
+                      category: e.target.value,
+                    })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="e.g., API, Database, Configuration"
                 />
               </div>
 
@@ -507,11 +830,14 @@ export default function ProjectDetailsPage() {
                 <label className="flex items-center gap-2">
                   <input
                     type="checkbox"
-                    checked={formData.isPublic}
+                    checked={materialFormData.isPublic}
                     onChange={(e) =>
-                      setFormData({ ...formData, isPublic: e.target.checked })
+                      setMaterialFormData({
+                        ...materialFormData,
+                        isPublic: e.target.checked,
+                      })
                     }
-                    className="w-4 h-4 text-primary-500 rounded focus:ring-primary-500"
+                    className="w-4 h-4 text-primary-600 rounded focus:ring-2 focus:ring-primary-500"
                   />
                   <span className="text-sm font-medium text-gray-700">
                     Make this material public
@@ -528,8 +854,8 @@ export default function ProjectDetailsPage() {
                   {loading
                     ? "Saving..."
                     : editingMaterial
-                      ? "Update Material"
-                      : "Add Material"}
+                      ? "Update"
+                      : "Create"}
                 </button>
                 <button
                   type="button"
