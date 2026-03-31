@@ -44,7 +44,6 @@ interface Task {
 }
 
 export default function MyTasksPage() {
-  const { data: session } = useSession();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,7 +51,6 @@ export default function MyTasksPage() {
   const [commentText, setCommentText] = useState<Record<string, string>>({});
   const [showMentions, setShowMentions] = useState<Record<string, boolean>>({});
   const [mentionSearch, setMentionSearch] = useState("");
-  const [cursorPosition, setCursorPosition] = useState(0);
   const textareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
 
   useEffect(() => {
@@ -67,7 +65,26 @@ export default function MyTasksPage() {
       const data = await res.json();
 
       if (res.ok) {
-        setTasks(data.tasks || []);
+        let tasks = data.tasks || [];
+
+        // Sort by status first
+        const statusOrder = ["IN_PROGRESS", "TODO", "DONE"];
+        const priorityOrder = ["HIGH", "MEDIUM", "LOW"]; // adjust if needed
+
+        tasks.sort((a, b) => {
+          // Compare status first
+          const statusDiff =
+            statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status);
+          if (statusDiff !== 0) return statusDiff;
+
+          // Then compare priority
+          return (
+            priorityOrder.indexOf(a.priority) -
+            priorityOrder.indexOf(b.priority)
+          );
+        });
+
+        setTasks(tasks);
       } else {
         toast.error("Error", { description: data.error });
       }
@@ -145,7 +162,7 @@ export default function MyTasksPage() {
       if (!textAfterAt.includes(" ")) {
         setMentionSearch(textAfterAt.toLowerCase());
         setShowMentions((prev) => ({ ...prev, [taskId]: true }));
-        setCursorPosition(lastAtIndex);
+        // setCursorPosition(lastAtIndex);
         return;
       }
     }
