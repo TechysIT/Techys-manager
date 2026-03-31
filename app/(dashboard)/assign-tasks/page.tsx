@@ -285,7 +285,9 @@ export default function AssignTasksPage() {
       sections: project.sections
         .map((section) => ({
           ...section,
-          tasks: section.tasks.filter((t) => !t.isAssigned),
+          tasks: section.tasks.filter(
+            (t) => !t.isAssigned && t.status !== "IN_PROGRESS",
+          ),
         }))
         .filter((section) => section.tasks.length > 0),
     }))
