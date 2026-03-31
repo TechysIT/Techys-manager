@@ -598,7 +598,7 @@ export default function ProjectDetailPage() {
                         {material.title}
                       </h3>
                       {material.content && (
-                        <p className="text-gray-600 text-xs mb-2 ">
+                        <p className="text-gray-600 text-xs mb-2 truncate">
                           {material.content}
                         </p>
                       )}
