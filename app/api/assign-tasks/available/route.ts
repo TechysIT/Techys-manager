@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
             tasks: {
               where: {
                 status: {
-                  in: ["TODO"],
+                  in: ["TODO", "IN_PROGRESS"],
                 },
               },
               include: {
