@@ -108,9 +108,9 @@ export async function GET(request: NextRequest) {
           },
         },
         orderBy: [
-          { priority: "desc" }, // High priority first
-          { deadline: "asc" }, // Earliest deadline first
-          { createdAt: "desc" }, // Newest first
+          { priority: "desc" },
+          { deadline: "asc" },
+          { createdAt: "desc" },
         ],
       }),
       prisma.task.count({ where }),

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { PaperAirplaneIcon } from "@heroicons/react/24/outline";
 

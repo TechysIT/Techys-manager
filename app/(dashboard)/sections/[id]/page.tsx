@@ -29,7 +29,11 @@ interface Comment {
     email: string;
   };
 }
-
+interface AssignedUser {
+  id: string;
+  name: string;
+  email: string;
+}
 interface Task {
   id: string;
   title: string;
@@ -38,6 +42,7 @@ interface Task {
   priority: "LOW" | "MEDIUM" | "HIGH";
   deadline: string | null;
   comments?: Comment[];
+  assignments?: { user: AssignedUser }[];
   _count: {
     comments: number;
   };
@@ -105,6 +110,7 @@ export default function SectionDetailPage() {
     }
   };
 
+  // Update fetchTasks to include assignments:
   const fetchTasks = async () => {
     setFetching(true);
     try {
@@ -480,157 +486,178 @@ export default function SectionDetailPage() {
                   No tasks
                 </p>
               ) : (
-                statusTasks.map((task) => (
-                  <div
-                    key={task.id}
-                    className="bg-white rounded-lg shadow hover:shadow-md transition-shadow"
-                  >
-                    {/* Task Header */}
-                    <div className="p-4">
-                      <h4 className="font-medium text-gray-900 mb-2">
-                        {task.title}
-                      </h4>
-                      {task.description && (
-                        <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                          {task.description}
-                        </p>
-                      )}
-                      <div className="flex flex-wrap gap-2 mb-3">
-                        <span
-                          className={`text-xs px-2 py-1 rounded-full ${getPriorityColor(task.priority)}`}
-                        >
-                          {task.priority}
-                        </span>
-                        {task.deadline && (
-                          <span className="text-xs px-2 py-1 rounded-full bg-purple-100 text-purple-800">
-                            {new Date(task.deadline).toLocaleDateString()}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex gap-2 mb-3">
-                        <button
-                          onClick={() => openEditModal(task)}
-                          className="flex-1 text-xs text-blue-600 hover:text-blue-800 py-1"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDelete(task.id)}
-                          className="flex-1 text-xs text-red-600 hover:text-red-800 py-1"
-                        >
-                          Delete
-                        </button>
-                      </div>
-
-                      {/* Comments Toggle */}
-                      <button
-                        onClick={() => toggleComments(task.id)}
-                        className="w-full flex items-center justify-center gap-2 text-sm text-gray-600 hover:text-gray-900 py-2 border-t border-gray-200"
-                      >
-                        <ChatBubbleLeftIcon className="w-4 h-4" />
-                        {expandedComments.has(task.id) ? "Hide" : "Show"}{" "}
-                        Comments ({task._count.comments})
-                      </button>
-                    </div>
-
-                    {/* Comments Section */}
-                    {expandedComments.has(task.id) && (
-                      <div className="border-t border-gray-200 p-4 bg-gray-50">
-                        {/* Existing Comments */}
-                        <div className="space-y-3 mb-3 max-h-48 overflow-y-auto">
-                          {task.comments && task.comments.length > 0 ? (
-                            task.comments.map((comment) => (
-                              <div
-                                key={comment.id}
-                                className="bg-white rounded p-3 text-sm"
+                statusTasks.map((task) => {
+                  const assignedUser = task.assignments?.[0]?.user;
+                  return (
+                    <div
+                      key={task.id}
+                      className="bg-white rounded-lg shadow hover:shadow-md transition-shadow"
+                    >
+                      {/* Task Header */}
+                      <div className="p-4">
+                        <h4 className="font-medium text-gray-900 mb-2 flex items-center gap-2">
+                          {task.title}
+                          {assignedUser && (
+                            <span className="text-xs bg-indigo-50 text-indigo-700 px-2 py-1 rounded-full flex items-center gap-1">
+                              <svg
+                                className="w-3 h-3"
+                                fill="currentColor"
+                                viewBox="0 0 20 20"
                               >
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="font-medium text-gray-900">
-                                    {comment.user.name}
-                                  </span>
-                                  <span className="text-xs text-gray-500">
-                                    {new Date(
-                                      comment.createdAt,
-                                    ).toLocaleString()}
-                                  </span>
-                                </div>
-                                <p className="text-gray-700 whitespace-pre-wrap">
-                                  {comment.content}
-                                </p>
-                              </div>
-                            ))
-                          ) : (
-                            <p className="text-gray-500 text-xs text-center py-2">
-                              No comments yet
-                            </p>
+                                <path
+                                  fillRule="evenodd"
+                                  d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
+                                  clipRule="evenodd"
+                                />
+                              </svg>
+                              {assignedUser.name}
+                            </span>
+                          )}
+                        </h4>
+
+                        {task.description && (
+                          <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+                            {task.description}
+                          </p>
+                        )}
+
+                        <div className="flex flex-wrap gap-2 mb-3">
+                          <span
+                            className={`text-xs px-2 py-1 rounded-full ${getPriorityColor(task.priority)}`}
+                          >
+                            {task.priority}
+                          </span>
+                          {task.deadline && (
+                            <span className="text-xs px-2 py-1 rounded-full bg-purple-100 text-purple-800">
+                              {new Date(task.deadline).toLocaleDateString()}
+                            </span>
                           )}
                         </div>
 
-                        {/* Add Comment with Mentions */}
-                        <div className="relative">
-                          <div className="flex gap-2">
-                            <input
-                              ref={(el) => {
-                                inputRefs.current[task.id] = el;
-                              }}
-                              type="text"
-                              value={commentText[task.id] || ""}
-                              onChange={(e) =>
-                                handleCommentChange(task.id, e.target.value)
-                              }
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter" && !e.shiftKey) {
-                                  e.preventDefault();
-                                  handleAddComment(task.id);
-                                }
-                              }}
-                              placeholder="Add comment (@ to mention)..."
-                              className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary-500"
-                            />
-                            <button
-                              onClick={() => handleAddComment(task.id)}
-                              className="p-2 bg-primary-500 text-white rounded hover:bg-primary-600"
-                            >
-                              <PaperAirplaneIcon className="w-4 h-4" />
-                            </button>
+                        <div className="flex gap-2 mb-3">
+                          <button
+                            onClick={() => openEditModal(task)}
+                            className="flex-1 text-xs text-blue-600 hover:text-blue-800 py-1"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDelete(task.id)}
+                            className="flex-1 text-xs text-red-600 hover:text-red-800 py-1"
+                          >
+                            Delete
+                          </button>
+                        </div>
+
+                        {/* Comments Toggle */}
+                        <button
+                          onClick={() => toggleComments(task.id)}
+                          className="w-full flex items-center justify-center gap-2 text-sm text-gray-600 hover:text-gray-900 py-2 border-t border-gray-200"
+                        >
+                          <ChatBubbleLeftIcon className="w-4 h-4" />
+                          {expandedComments.has(task.id) ? "Hide" : "Show"}{" "}
+                          Comments ({task._count.comments})
+                        </button>
+                      </div>
+                      {/* Comments Section */}
+                      {expandedComments.has(task.id) && (
+                        <div className="border-t border-gray-200 p-4 bg-gray-50">
+                          {/* Existing Comments */}
+                          <div className="space-y-3 mb-3 max-h-48 overflow-y-auto">
+                            {task.comments && task.comments.length > 0 ? (
+                              task.comments.map((comment) => (
+                                <div
+                                  key={comment.id}
+                                  className="bg-white rounded p-3 text-sm"
+                                >
+                                  <div className="flex items-center gap-2 mb-1 ">
+                                    <span className="font-medium text-orange-600 text-xs">
+                                      {comment.user.name}
+                                    </span>
+                                    <span className="text-xs text-gray-500">
+                                      {new Date(
+                                        comment.createdAt,
+                                      ).toLocaleString()}
+                                    </span>
+                                  </div>
+                                  <p className="text-gray-900 whitespace-pre-wrap">
+                                    {comment.content}
+                                  </p>
+                                </div>
+                              ))
+                            ) : (
+                              <p className="text-gray-500 text-xs text-center py-2">
+                                No comments yet
+                              </p>
+                            )}
                           </div>
 
-                          {/* Mention Dropdown */}
-                          {showMentions[task.id] &&
-                            filteredMentionUsers.length > 0 && (
-                              <div className="absolute bottom-full mb-2 left-0 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-40 overflow-y-auto z-10">
-                                {filteredMentionUsers
-                                  .slice(0, 5)
-                                  .map((user) => (
-                                    <button
-                                      key={user.id}
-                                      onClick={() =>
-                                        insertMention(task.id, user)
-                                      }
-                                      className="w-full text-left px-3 py-2 hover:bg-gray-100 flex items-center gap-2 text-sm"
-                                    >
-                                      <div className="w-6 h-6 bg-primary-100 rounded-full flex items-center justify-center">
-                                        <span className="text-primary-600 font-medium text-xs">
-                                          {user.name.charAt(0).toUpperCase()}
-                                        </span>
-                                      </div>
-                                      <div>
-                                        <div className="font-medium">
-                                          {user.name}
+                          {/* Add Comment with Mentions */}
+                          <div className="relative">
+                            <div className="flex gap-2">
+                              <input
+                                ref={(el) => {
+                                  inputRefs.current[task.id] = el;
+                                }}
+                                type="text"
+                                value={commentText[task.id] || ""}
+                                onChange={(e) =>
+                                  handleCommentChange(task.id, e.target.value)
+                                }
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" && !e.shiftKey) {
+                                    e.preventDefault();
+                                    handleAddComment(task.id);
+                                  }
+                                }}
+                                placeholder="Add comment (@ to mention)..."
+                                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-primary-500"
+                              />
+                              <button
+                                onClick={() => handleAddComment(task.id)}
+                                className="p-2 bg-primary-500 text-white rounded hover:bg-primary-600"
+                              >
+                                <PaperAirplaneIcon className="w-4 h-4" />
+                              </button>
+                            </div>
+
+                            {/* Mention Dropdown */}
+                            {showMentions[task.id] &&
+                              filteredMentionUsers.length > 0 && (
+                                <div className="absolute bottom-full mb-2 left-0 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-40 overflow-y-auto z-10">
+                                  {filteredMentionUsers
+                                    .slice(0, 5)
+                                    .map((user) => (
+                                      <button
+                                        key={user.id}
+                                        onClick={() =>
+                                          insertMention(task.id, user)
+                                        }
+                                        className="w-full text-left px-3 py-2 hover:bg-gray-100 flex items-center gap-2 text-sm"
+                                      >
+                                        <div className="w-6 h-6 bg-primary-100 rounded-full flex items-center justify-center">
+                                          <span className="text-primary-600 font-medium text-xs">
+                                            {user.name.charAt(0).toUpperCase()}
+                                          </span>
                                         </div>
-                                        <div className="text-xs text-gray-500">
-                                          {user.email}
+                                        <div>
+                                          <div className="font-medium">
+                                            {user.name}
+                                          </div>
+                                          <div className="text-xs text-gray-500">
+                                            {user.email}
+                                          </div>
                                         </div>
-                                      </div>
-                                    </button>
-                                  ))}
-                              </div>
-                            )}
+                                      </button>
+                                    ))}
+                                </div>
+                              )}
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </div>
-                ))
+                      )}
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { UserIcon } from "@heroicons/react/24/outline";
+import { UserIcon, BriefcaseIcon } from "@heroicons/react/24/outline";
 import { toast } from "sonner";
 
 interface User {
@@ -22,6 +22,19 @@ interface Task {
   assignedTo: string | null;
 }
 
+interface WorkingTask {
+  id: string;
+  title: string;
+  priority: string;
+  deadline: string | null;
+  section: {
+    name: string;
+    project: {
+      name: string;
+    };
+  };
+}
+
 interface Section {
   id: string;
   name: string;
@@ -38,7 +51,9 @@ export default function AssignTasksPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [showModal, setShowModal] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showWorkingModal, setShowWorkingModal] = useState(false);
+  const [workingTasks, setWorkingTasks] = useState<WorkingTask[]>([]);
   const [selectedToAssign, setSelectedToAssign] = useState<Set<string>>(
     new Set(),
   );
@@ -92,12 +107,39 @@ export default function AssignTasksPage() {
     }
   };
 
+  const fetchWorkingTasks = async (userId: string) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/assign-tasks/working?userId=${userId}`);
+      const data = await res.json();
+
+      if (res.ok) {
+        setWorkingTasks(data.tasks || []);
+      } else {
+        toast.error("Error", { description: data.error });
+      }
+    } catch (error) {
+      console.error("Error fetching working tasks:", error);
+      toast.error("Network Error", {
+        description: "Failed to fetch working tasks",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const openAssignModal = async (user: User) => {
     setSelectedUser(user);
     setSelectedToAssign(new Set());
     setSelectedToUnassign(new Set());
-    setShowModal(true);
+    setShowAssignModal(true);
     await fetchProjectsAndTasks(user.id);
+  };
+
+  const openWorkingModal = async (user: User) => {
+    setSelectedUser(user);
+    setShowWorkingModal(true);
+    await fetchWorkingTasks(user.id);
   };
 
   const toggleTaskToAssign = (taskId: string) => {
@@ -122,15 +164,15 @@ export default function AssignTasksPage() {
 
   const toggleSectionToAssign = (section: Section) => {
     const newSelected = new Set(selectedToAssign);
-    const unassignedTasks = section.tasks.filter((t) => !t.isAssigned);
+    const unassignedTasks = section.tasks.filter(
+      (t) => !t.isAssigned && t.status !== "DONE",
+    );
 
     const allSelected = unassignedTasks.every((t) => newSelected.has(t.id));
 
     if (allSelected) {
-      // Unselect all
       unassignedTasks.forEach((task) => newSelected.delete(task.id));
     } else {
-      // Select all
       unassignedTasks.forEach((task) => newSelected.add(task.id));
     }
 
@@ -139,15 +181,15 @@ export default function AssignTasksPage() {
 
   const toggleSectionToUnassign = (section: Section) => {
     const newSelected = new Set(selectedToUnassign);
-    const assignedTasks = section.tasks.filter((t) => t.isAssigned);
+    const assignedTasks = section.tasks.filter(
+      (t) => t.isAssigned && t.status !== "DONE",
+    );
 
     const allSelected = assignedTasks.every((t) => newSelected.has(t.id));
 
     if (allSelected) {
-      // Unselect all
       assignedTasks.forEach((task) => newSelected.delete(task.id));
     } else {
-      // Select all
       assignedTasks.forEach((task) => newSelected.add(task.id));
     }
 
@@ -266,7 +308,6 @@ export default function AssignTasksPage() {
     }))
     .filter((project) => project.sections.length > 0);
 
-  // Separate assigned and unassigned tasks
   const assignedProjects = filteredProjects
     .map((project) => ({
       ...project,
@@ -285,9 +326,7 @@ export default function AssignTasksPage() {
       sections: project.sections
         .map((section) => ({
           ...section,
-          tasks: section.tasks.filter(
-            (t) => !t.isAssigned && t.status !== "IN_PROGRESS",
-          ),
+          tasks: section.tasks.filter((t) => !t.isAssigned),
         }))
         .filter((section) => section.tasks.length > 0),
     }))
@@ -364,19 +403,28 @@ export default function AssignTasksPage() {
                   {user.role.name}
                 </span>
               </div>
-              <button
-                onClick={() => openAssignModal(user)}
-                className="w-full bg-primary-500 text-white px-4 py-2 rounded-lg hover:bg-primary-600 transition-colors"
-              >
-                Manage Tasks
-              </button>
+              <div className="flex gap-10">
+                <button
+                  onClick={() => openAssignModal(user)}
+                  className="flex-1 bg-primary-500 text-white px-3 py-2 rounded-bl-lg rounded-tr-lg hover:bg-primary-600 transition-colors text-sm flex items-center justify-center gap-1"
+                >
+                  Assign Tasks
+                </button>
+                <button
+                  onClick={() => openWorkingModal(user)}
+                  className="flex-1 bg-indigo-500 text-white px-3 py-2 rounded-br-lg rounded-tl-lg hover:bg-indigo-600 transition-colors text-sm flex items-center justify-center gap-1"
+                >
+                  <BriefcaseIcon className="w-4 h-4" />
+                  Working
+                </button>
+              </div>
             </div>
           ))}
         </div>
       )}
 
       {/* Assignment Modal */}
-      {showModal && selectedUser && (
+      {showAssignModal && selectedUser && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
             {/* Modal Header */}
@@ -658,7 +706,7 @@ export default function AssignTasksPage() {
                 <div className="flex gap-3">
                   <button
                     onClick={() => {
-                      setShowModal(false);
+                      setShowAssignModal(false);
                       setSelectedUser(null);
                       setSelectedToAssign(new Set());
                       setSelectedToUnassign(new Set());
@@ -690,6 +738,100 @@ export default function AssignTasksPage() {
                     </button>
                   )}
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Currently Working Modal */}
+      {showWorkingModal && selectedUser && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-gray-200 bg-green-50">
+              <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                <BriefcaseIcon className="w-6 h-6 text-green-600" />
+                {selectedUser.name}'s Current Work
+              </h2>
+              <p className="text-gray-600 mt-1">Tasks in progress</p>
+            </div>
+
+            {/* Modal Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500"></div>
+                </div>
+              ) : workingTasks.length === 0 ? (
+                <div className="text-center py-12">
+                  <BriefcaseIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                    No tasks in progress
+                  </h3>
+                  <p className="text-gray-600">
+                    {selectedUser.name} doesn't have any tasks marked as
+                    IN_PROGRESS.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {workingTasks.map((task) => (
+                    <div
+                      key={task.id}
+                      className="bg-white border-2 border-green-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <h3 className="font-semibold text-gray-900 flex-1">
+                          {task.title}
+                        </h3>
+                        <span
+                          className={`text-xs px-2 py-1 rounded-full ml-2 ${
+                            task.priority === "HIGH"
+                              ? "bg-red-100 text-red-800"
+                              : task.priority === "MEDIUM"
+                                ? "bg-yellow-100 text-yellow-800"
+                                : "bg-gray-100 text-gray-800"
+                          }`}
+                        >
+                          {task.priority}
+                        </span>
+                      </div>
+                      <div className="text-sm text-gray-600 mb-2">
+                        <span className="font-medium">
+                          {task.section.project.name}
+                        </span>
+                        {" → "}
+                        <span>{task.section.name}</span>
+                      </div>
+                      {task.deadline && (
+                        <div className="text-sm text-gray-500">
+                          Deadline:{" "}
+                          {new Date(task.deadline).toLocaleDateString()}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-6 border-t border-gray-200 bg-gray-50">
+              <div className="flex justify-between items-center">
+                <div className="text-sm text-gray-600">
+                  {workingTasks.length} task
+                  {workingTasks.length !== 1 ? "s" : ""} in progress
+                </div>
+                <button
+                  onClick={() => {
+                    setShowWorkingModal(false);
+                    setSelectedUser(null);
+                  }}
+                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                >
+                  Close
+                </button>
               </div>
             </div>
           </div>
